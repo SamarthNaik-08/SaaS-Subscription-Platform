@@ -1,0 +1,120 @@
+package com.saasplatform.ai.multimodal;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Slf4j
+@Component("openAiMultimodalProvider")
+public class OpenAiMultimodalProvider implements AiMultimodalProvider {
+
+    @Value("${app.ai.openai.api-key:}")
+    private String apiKey;
+
+    @Value("${app.ai.openai.base-url:https://api.openai.com/v1}")
+    private String baseUrl;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RestClient restClient = RestClient.create();
+
+    @Override
+    public String getProviderName() {
+        return "OpenAI GPT-4o Multimodal";
+    }
+
+    @Override
+    public boolean isAvailable() {
+        return apiKey != null && !apiKey.trim().isEmpty() && !apiKey.equalsIgnoreCase("placeholder") && !apiKey.startsWith("your_");
+    }
+
+    @Override
+    public String processMultimodal(String prompt, List<MultimodalAttachment> attachments, String model, Map<String, Object> options) {
+        String targetModel = (model != null && !model.isBlank()) ? model : "gpt-4o";
+        log.info("[OpenAI Multimodal] Processing multimodal with model: {}, attachments: {}", 
+                targetModel, attachments != null ? attachments.size() : 0);
+
+        try {
+            List<Map<String, Object>> messages = new ArrayList<>();
+
+            // System prompt if present
+            if (options != null && options.containsKey("systemInstruction") && options.get("systemInstruction") != null) {
+                String sysInst = options.get("systemInstruction").toString().trim();
+                if (!sysInst.isEmpty()) {
+                    messages.add(Map.of("role", "system", "content", sysInst));
+                }
+            }
+
+            // User multimodal content parts
+            List<Map<String, Object>> contentParts = new ArrayList<>();
+            String userPrompt = (prompt != null && !prompt.isBlank()) ? prompt : "Please analyze the attached files in detail.";
+            contentParts.add(Map.of("type", "text", "text", userPrompt));
+
+            if (attachments != null) {
+                for (MultimodalAttachment att : attachments) {
+                    if (att.isImage()) {
+                        String dataUri = "data:" + att.getContentType() + ";base64," + att.getBase64Data();
+                        contentParts.add(Map.of(
+                                "type", "image_url",
+                                "image_url", Map.of("url", dataUri)
+                        ));
+                    } else {
+                        String textSnippet = String.format("\n\n--- Attached Document: %s (%s) ---\n%s\n--- End of %s ---\n",
+                                att.getFileName(), att.getContentType(), 
+                                att.getTextContent() != null ? att.getTextContent() : "[Binary Document]", 
+                                att.getFileName());
+                        contentParts.add(Map.of("type", "text", "text", textSnippet));
+                    }
+                }
+            }
+
+            Map<String, Object> userMessage = new HashMap<>();
+            userMessage.put("role", "user");
+            userMessage.put("content", contentParts);
+            messages.add(userMessage);
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", targetModel);
+            requestBody.put("messages", messages);
+
+            if (options != null && options.containsKey("temperature")) {
+                try {
+                    requestBody.put("temperature", Double.parseDouble(options.get("temperature").toString()));
+                } catch (Exception ignored) {}
+            }
+
+            String url = baseUrl.endsWith("/") ? baseUrl + "chat/completions" : baseUrl + "/chat/completions";
+
+            String responseJson = restClient.post()
+                    .uri(url)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey.trim())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(String.class);
+
+            JsonNode root = objectMapper.readTree(responseJson);
+            JsonNode choices = root.path("choices");
+            if (choices.isArray() && !choices.isEmpty()) {
+                JsonNode message = choices.get(0).path("message");
+                if (message.has("content")) {
+                    return message.get("content").asText();
+                }
+            }
+            return "No content generated by OpenAI.";
+
+        } catch (Exception e) {
+            log.error("[OpenAI Multimodal] Error during multimodal completion: {}", e.getMessage(), e);
+            throw new RuntimeException("OpenAI Multimodal Error: " + e.getMessage(), e);
+        }
+    }
+}

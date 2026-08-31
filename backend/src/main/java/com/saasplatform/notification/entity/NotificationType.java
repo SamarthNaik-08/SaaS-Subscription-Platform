@@ -1,0 +1,15 @@
+package com.saasplatform.notification.entity;
+
+public enum NotificationType {
+    WELCOME,
+    PAYMENT_SUCCESS,
+    PAYMENT_FAILED,
+    INVOICE_CREATED,
+    SUBSCRIPTION_UPGRADED,
+    SUBSCRIPTION_CANCELLED,
+    SUBSCRIPTION_RESUMED,
+    USAGE_WARNING_75,
+    USAGE_WARNING_90,
+    QUOTA_EXCEEDED,
+    SECURITY_ALERT
+}

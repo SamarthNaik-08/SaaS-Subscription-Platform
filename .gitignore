@@ -1,0 +1,27 @@
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Java / Maven build output
+backend/target/
+target/
+*.class
+*.jar
+*.war
+
+# Node / Frontend build output
+frontend/node_modules/
+node_modules/
+frontend/dist/
+dist/
+
+# IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+maven/
