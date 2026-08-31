@@ -1,6 +1,8 @@
 package com.saasplatform.ai.controller;
 
 import com.saasplatform.ai.dto.*;
+import com.saasplatform.ai.search.dto.*;
+import com.saasplatform.ai.search.service.WebSearchService;
 import com.saasplatform.ai.service.AiService;
 import com.saasplatform.common.dto.ApiResponse;
 import com.saasplatform.security.UserPrincipal;
@@ -23,6 +25,7 @@ import java.util.Map;
 public class AiController {
 
     private final AiService aiService;
+    private final WebSearchService webSearchService;
 
     @PostMapping("/generate")
     public ResponseEntity<ApiResponse<AiGenerateResponse>> generate(
@@ -60,6 +63,24 @@ public class AiController {
     ) {
         AiGenerateResponse response = aiService.processMultimodal(userPrincipal.getId(), prompt, files, model, Map.of());
         return ResponseEntity.ok(ApiResponse.success(response, "Multimodal inference completed successfully"));
+    }
+
+    @PostMapping("/search")
+    public ResponseEntity<ApiResponse<WebSearchResult>> search(
+            @Valid @RequestBody WebSearchRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        WebSearchResult result = webSearchService.search(request.getQuery(), request.getMaxResults());
+        return ResponseEntity.ok(ApiResponse.success(result, "Web search completed successfully"));
+    }
+
+    @PostMapping("/search/generate")
+    public ResponseEntity<ApiResponse<AiSearchGenerateResponse>> searchAndGenerate(
+            @Valid @RequestBody AiSearchGenerateRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        AiSearchGenerateResponse response = webSearchService.searchAndSynthesize(userPrincipal.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Web search and synthesis completed successfully"));
     }
 
     @GetMapping("/models")

@@ -33,6 +33,10 @@ import {
   ExternalLink,
   Layers,
   Wand2,
+  BookOpen,
+  Link as LinkIcon,
+  Calendar,
+  ShieldCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { aiService } from '../../services/aiService';
@@ -54,6 +58,7 @@ export const AIStudioPage = () => {
     },
   ]);
   const [loading, setLoading] = useState(false);
+  const [searchStage, setSearchStage] = useState(0); // 0: Idle, 1: Searching, 2: Reviewing, 3: Synthesizing
   const [isProcessingMultimodal, setIsProcessingMultimodal] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [systemInstruction, setSystemInstruction] = useState('');
@@ -150,7 +155,7 @@ export const AIStudioPage = () => {
     });
   };
 
-  // Workspace Library Files (Simulated local assets)
+  // Workspace Library Files
   const libraryFiles = [
     { name: 'architecture_spec.md', size: '14.2 KB', type: 'doc' },
     { name: 'schema_design.sql', size: '8.4 KB', type: 'code' },
@@ -206,7 +211,7 @@ export const AIStudioPage = () => {
       id: 'web-search',
       icon: Globe,
       title: 'Web search',
-      subtitle: 'Find real-time news and info',
+      subtitle: 'Find real-time news and info with citations',
       action: () => {
         setActiveMode('web-search');
         setIsActionMenuOpen(false);
@@ -274,6 +279,53 @@ export const AIStudioPage = () => {
     }
   };
 
+  // Helper to render text with clickable citation badges [S1], [S2]
+  const renderFormattedContentWithCitations = (content, citations = [], sources = []) => {
+    if (!content) return null;
+
+    const sourceMap = {};
+    (sources || []).forEach((s) => {
+      sourceMap[s.id] = s;
+    });
+    (citations || []).forEach((c) => {
+      sourceMap[c.id] = c;
+    });
+
+    const parts = content.split(/(\[S\d+\])/g);
+
+    return parts.map((part, pIdx) => {
+      const match = part.match(/^\[(S\d+)\]$/);
+      if (match) {
+        const sourceId = match[1];
+        const source = sourceMap[sourceId];
+        if (source && source.url && (source.url.startsWith('http://') || source.url.startsWith('https://'))) {
+          return (
+            <a
+              key={pIdx}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-bold bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 transition-all cursor-pointer hover:scale-105"
+              title={`${source.sourceName || 'Source'}: ${source.title || source.url}`}
+            >
+              <span>[{sourceId}]</span>
+              <ExternalLink className="w-2.5 h-2.5 opacity-80" />
+            </a>
+          );
+        }
+        return (
+          <span
+            key={pIdx}
+            className="inline-block px-1.5 py-0.5 mx-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700"
+          >
+            [{sourceId}]
+          </span>
+        );
+      }
+      return <span key={pIdx}>{part}</span>;
+    });
+  };
+
   const handleSend = async (e, overridePrompt = null) => {
     e?.preventDefault();
     const targetPrompt = (overridePrompt !== null ? overridePrompt : prompt).trim();
@@ -306,6 +358,12 @@ export const AIStudioPage = () => {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
     if (hasFiles) setIsProcessingMultimodal(true);
+
+    if (activeMode === 'web-search') {
+      setSearchStage(1);
+      setTimeout(() => setSearchStage(2), 1200);
+      setTimeout(() => setSearchStage(3), 2200);
+    }
 
     const startTime = performance.now();
 
@@ -347,8 +405,72 @@ export const AIStudioPage = () => {
             }));
           }
         }
+      } else if (activeMode === 'web-search') {
+        // 2. Real Web Search + Citations Workflow (Phase 5C)
+        let enrichedSystemInstruction = systemInstruction || '';
+        if (isThinkActive) {
+          enrichedSystemInstruction += ' Provide structured multi-perspective analysis and reasoning.';
+        }
+
+        const res = await aiService.generateWebSearchAnswer(targetPrompt, {
+          model,
+          maxResults: 5,
+          systemInstruction: enrichedSystemInstruction.trim() || undefined,
+          temperature,
+        });
+
+        const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(2);
+
+        if (res.success && res.data) {
+          const reasoningSteps = isThinkActive
+            ? [
+                `Queried live search engine for: "${targetPrompt}"`,
+                `Retrieved and normalized ${res.data.sources?.length || 0} authoritative sources`,
+                `Validated ${res.data.citations?.length || 0} citation references against verified result set`,
+                'Synthesized grounded answer with clickable citations',
+              ]
+            : null;
+
+          const assistantMsg = {
+            id: 'asst-' + messageId,
+            role: 'assistant',
+            isImage: false,
+            isSearch: true,
+            content: res.data.answer,
+            citations: res.data.citations || [],
+            sources: res.data.sources || [],
+            model: res.data.model,
+            provider: res.data.provider,
+            searchProvider: res.data.searchProvider,
+            mode: 'web-search',
+            reasoningSteps,
+            reasoningTime: isThinkActive ? elapsedSec : null,
+            tokens: res.data.totalTokens,
+            latency: elapsedSec,
+            timestamp: new Date().toLocaleTimeString(),
+          };
+
+          setMessages((prev) => [...prev, assistantMsg]);
+
+          if (isThinkActive) {
+            setExpandedThoughts((prev) => ({
+              ...prev,
+              [messages.length + 1]: true,
+            }));
+          }
+
+          if (res.data.quotaUsage) {
+            setCurrentUsage((prev) => ({
+              ...prev,
+              metrics: {
+                ...prev?.metrics,
+                AI_REQUEST: res.data.quotaUsage,
+              },
+            }));
+          }
+        }
       } else if (hasFiles) {
-        // 2. Multimodal File & Image Understanding Workflow (Phase 5C)
+        // 3. Multimodal File & Image Understanding Workflow (Phase 5C)
         const formData = new FormData();
         formData.append('prompt', targetPrompt || 'Please analyze and summarize the attached files in detail.');
         formData.append('model', model);
@@ -406,7 +528,7 @@ export const AIStudioPage = () => {
           }
         }
       } else {
-        // 3. Standard Text / Chat Workflow
+        // 4. Standard Text / Chat Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Provide deep, structured step-by-step reasoning.';
@@ -479,6 +601,7 @@ export const AIStudioPage = () => {
       }
     } finally {
       setLoading(false);
+      setSearchStage(0);
       setIsProcessingMultimodal(false);
     }
   };
@@ -505,7 +628,7 @@ export const AIStudioPage = () => {
       case 'web-search':
         return {
           title: 'Web Search Mode',
-          desc: 'Augmenting answers with real-time web exploration',
+          desc: 'Real-time live search with verified source citations',
           icon: Globe,
           color: 'text-sky-400 border-sky-500/30 bg-sky-500/10',
         };
@@ -599,7 +722,7 @@ export const AIStudioPage = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-100">AI Studio Workspace</h1>
-              <p className="text-xs text-slate-400">Multi-tool intelligent inference, image synthesis & multimodal workbench</p>
+              <p className="text-xs text-slate-400">Multi-tool intelligent inference, image synthesis, web search & multimodal workbench</p>
             </div>
           </div>
         </div>
@@ -802,7 +925,7 @@ export const AIStudioPage = () => {
                   onClick={() => setActiveMode(activeMode === 'web-search' ? null : 'web-search')}
                   className={`p-2 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all ${
                     activeMode === 'web-search'
-                      ? 'bg-sky-500/20 border-sky-500/50 text-sky-300'
+                      ? 'bg-sky-500/20 border-sky-500/50 text-sky-300 shadow-sm'
                       : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -883,17 +1006,33 @@ export const AIStudioPage = () => {
                         ? 'bg-gradient-to-tr from-indigo-600 to-purple-600 text-white'
                         : msg.isImage
                         ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                        : msg.isSearch
+                        ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
                         : 'bg-slate-800 text-indigo-400 border border-slate-700'
                     }`}
                   >
-                    {isUser ? <User className="w-4 h-4" /> : msg.isImage ? <Wand2 className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                    {isUser ? (
+                      <User className="w-4 h-4" />
+                    ) : msg.isImage ? (
+                      <Wand2 className="w-4 h-4" />
+                    ) : msg.isSearch ? (
+                      <Globe className="w-4 h-4" />
+                    ) : (
+                      <Bot className="w-4 h-4" />
+                    )}
                   </div>
 
                   <div className={`space-y-2 max-w-[85%] ${isUser ? 'text-right' : 'text-left'}`}>
                     {/* Header line */}
                     <div className="flex items-center gap-2 text-[11px] text-slate-400">
                       <span className="font-semibold text-slate-300">
-                        {isUser ? 'You' : msg.isImage ? 'Nexus Image AI' : msg.model || 'Nexus AI'}
+                        {isUser
+                          ? 'You'
+                          : msg.isImage
+                          ? 'Nexus Image AI'
+                          : msg.isSearch
+                          ? `${msg.model || 'Nexus AI'} • Web Search`
+                          : msg.model || 'Nexus AI'}
                       </span>
                       {msg.isImage && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border text-amber-400 border-amber-500/30 bg-amber-500/10">
@@ -977,7 +1116,6 @@ export const AIStudioPage = () => {
                     {/* Image Result Card (Phase 5B) */}
                     {msg.isImage ? (
                       <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl space-y-3 max-w-lg">
-                        {/* Image Canvas with hover zoom */}
                         <div
                           onClick={() => setLightboxImage(msg)}
                           className="relative group rounded-xl overflow-hidden border border-slate-800/80 bg-slate-900 cursor-pointer flex items-center justify-center"
@@ -994,7 +1132,6 @@ export const AIStudioPage = () => {
                           </div>
                         </div>
 
-                        {/* Revised Prompt Info */}
                         {msg.revisedPrompt && (
                           <p className="text-xs text-slate-300 leading-relaxed px-1">
                             <span className="text-slate-500 font-medium">Prompt: </span>
@@ -1002,7 +1139,6 @@ export const AIStudioPage = () => {
                           </p>
                         )}
 
-                        {/* Image Action Toolbar */}
                         <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                           <span className="font-mono text-[11px] text-slate-500">
                             {msg.provider || 'Nexus Image'}
@@ -1045,7 +1181,7 @@ export const AIStudioPage = () => {
                         </div>
                       </div>
                     ) : (
-                      /* Standard Text / Chat Bubble */
+                      /* Standard Text / Search Bubble */
                       <div
                         className={`relative p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                           isUser
@@ -1053,12 +1189,74 @@ export const AIStudioPage = () => {
                             : 'bg-slate-950/80 border border-slate-800/80 text-slate-200 shadow-sm'
                         }`}
                       >
-                        {msg.content}
+                        {/* Formatted Content with Interactive Citations */}
+                        <div className="space-y-3">
+                          <p>
+                            {msg.isSearch
+                              ? renderFormattedContentWithCitations(msg.content, msg.citations, msg.sources)
+                              : msg.content}
+                          </p>
+
+                          {/* Sources Card Section (Phase 5C Real Web Search) */}
+                          {msg.isSearch && msg.sources && msg.sources.length > 0 && (
+                            <div className="pt-3 mt-3 border-t border-slate-800/80 space-y-2">
+                              <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                                <div className="flex items-center space-x-1.5 text-sky-400">
+                                  <BookOpen className="w-3.5 h-3.5" />
+                                  <span>Sources ({msg.sources.length})</span>
+                                </div>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  {msg.searchProvider || 'Tavily Search'}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {msg.sources.map((src, sIdx) => {
+                                  const isValidUrl =
+                                    src.url && (src.url.startsWith('https://') || src.url.startsWith('http://'));
+                                  return (
+                                    <a
+                                      key={src.id || sIdx}
+                                      href={isValidUrl ? src.url : '#'}
+                                      target={isValidUrl ? '_blank' : '_self'}
+                                      rel="noopener noreferrer"
+                                      className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-sky-500/50 hover:bg-slate-900 text-left flex flex-col justify-between transition-all group shadow-sm"
+                                    >
+                                      <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-[10px]">
+                                          <span className="px-1.5 py-0.2 rounded font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30">
+                                            [{src.id || `S${sIdx + 1}`}] {src.sourceName || 'Web Source'}
+                                          </span>
+                                          {src.publishedDate && (
+                                            <span className="text-slate-500 flex items-center gap-0.5">
+                                              <Calendar className="w-2.5 h-2.5" />
+                                              {src.publishedDate}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-xs font-medium text-slate-200 group-hover:text-sky-300 line-clamp-1">
+                                          {src.title}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                                          {src.snippet}
+                                        </p>
+                                      </div>
+                                      <div className="mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 group-hover:text-sky-400">
+                                        <span className="truncate max-w-[180px]">{src.url}</span>
+                                        <ExternalLink className="w-3 h-3 shrink-0 ml-1" />
+                                      </div>
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
 
                         {!isUser && (
                           <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
                             <span className="font-mono text-slate-400">
-                              ~{msg.tokens} tokens
+                              ~{msg.tokens} tokens {msg.isSearch ? '• Web Augmented' : ''}
                             </span>
                             <button
                               onClick={() => handleCopy(msg.content, index)}
@@ -1088,11 +1286,15 @@ export const AIStudioPage = () => {
                   className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-md ${
                     activeMode === 'image'
                       ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                      : activeMode === 'web-search'
+                      ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
                       : 'bg-slate-800 text-indigo-400 border border-slate-700'
                   }`}
                 >
                   {activeMode === 'image' ? (
                     <Wand2 className="w-4 h-4 animate-spin" />
+                  ) : activeMode === 'web-search' ? (
+                    <Globe className="w-4 h-4 animate-spin" />
                   ) : (
                     <Bot className="w-4 h-4 animate-pulse" />
                   )}
@@ -1106,6 +1308,24 @@ export const AIStudioPage = () => {
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Synthesizing in {imageStylePreset} style ({imageAspectRatio})...
                         </p>
+                      </div>
+                    </div>
+                  ) : activeMode === 'web-search' ? (
+                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-sky-500/30 text-sky-300 text-xs space-y-2 shadow-lg animate-in fade-in">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping" />
+                        <div>
+                          <p className="font-semibold text-sky-200">
+                            {searchStage <= 1
+                              ? '🌐 Searching the web...'
+                              : searchStage === 2
+                              ? '🔎 Reviewing & verifying sources...'
+                              : '🧠 Synthesizing answer with citations...'}
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Retrieving live internet knowledge and grounding factual claims...
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ) : isProcessingMultimodal ? (
@@ -1190,7 +1410,6 @@ export const AIStudioPage = () => {
                 ref={actionMenuRef}
                 className="absolute bottom-20 left-4 z-20 w-80 bg-[#18181b]/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in slide-in-from-bottom-3"
               >
-                {/* Search inside popover */}
                 <div className="px-2.5 py-1.5 mb-1 bg-slate-900/80 rounded-xl border border-slate-800/80 flex items-center gap-2">
                   <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   <input
@@ -1287,7 +1506,6 @@ export const AIStudioPage = () => {
               onSubmit={(e) => handleSend(e, null)}
               className="flex items-center gap-2 p-1.5 rounded-2xl bg-[#111318] border border-slate-800/90 shadow-inner"
             >
-              {/* + Action Menu Trigger Button */}
               <button
                 type="button"
                 onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
@@ -1299,7 +1517,6 @@ export const AIStudioPage = () => {
                 <Plus className="w-5 h-5 transition-transform duration-200" />
               </button>
 
-              {/* Main Input Field */}
               <input
                 type="text"
                 value={prompt}
@@ -1307,6 +1524,8 @@ export const AIStudioPage = () => {
                 placeholder={
                   activeMode === 'image'
                     ? 'Describe the image you want to create...'
+                    : activeMode === 'web-search'
+                    ? 'Search the web and ask anything...'
                     : activeMode === 'deep-research'
                     ? 'Enter topic for deep multi-perspective research...'
                     : attachments.length > 0
@@ -1317,7 +1536,6 @@ export const AIStudioPage = () => {
                 className="flex-1 px-3 py-2 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-50"
               />
 
-              {/* Think Mode Toggle Button */}
               <button
                 type="button"
                 onClick={() => setIsThinkActive(!isThinkActive)}
@@ -1332,7 +1550,6 @@ export const AIStudioPage = () => {
                 <span>Think</span>
               </button>
 
-              {/* Mic / Voice Input Placeholder */}
               <button
                 type="button"
                 onClick={() => {}}
@@ -1342,18 +1559,25 @@ export const AIStudioPage = () => {
                 <Mic className="w-4 h-4" />
               </button>
 
-              {/* Send Action Button */}
               <button
                 type="submit"
                 disabled={(!prompt.trim() && attachments.length === 0) || loading || isQuotaExceeded}
                 className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
                   activeMode === 'image'
                     ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/20'
+                    : activeMode === 'web-search'
+                    ? 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'
                     : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'
                 }`}
-                title={activeMode === 'image' ? 'Generate Image' : 'Send Prompt'}
+                title={activeMode === 'image' ? 'Generate Image' : activeMode === 'web-search' ? 'Search Web & Answer' : 'Send Prompt'}
               >
-                {activeMode === 'image' ? <Wand2 className="w-4 h-4" /> : <AudioWaveform className="w-4 h-4" />}
+                {activeMode === 'image' ? (
+                  <Wand2 className="w-4 h-4" />
+                ) : activeMode === 'web-search' ? (
+                  <Globe className="w-4 h-4" />
+                ) : (
+                  <AudioWaveform className="w-4 h-4" />
+                )}
               </button>
             </form>
           </div>

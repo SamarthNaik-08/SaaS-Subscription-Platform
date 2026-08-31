@@ -29,6 +29,23 @@ export const aiService = {
     return response.data;
   },
 
+  searchWeb: async (query, maxResults = 5) => {
+    const response = await api.post('/ai/search', { query, maxResults });
+    return response.data;
+  },
+
+  generateWebSearchAnswer: async (query, options = {}) => {
+    const response = await api.post('/ai/search/generate', {
+      query,
+      model: options.model || 'gemini-2.0-flash',
+      maxResults: options.maxResults || 5,
+      systemInstruction: options.systemInstruction,
+      temperature: options.temperature,
+      parameters: options.parameters || {},
+    });
+    return response.data;
+  },
+
   getModels: async () => {
     const response = await api.get('/ai/models');
     return response.data;

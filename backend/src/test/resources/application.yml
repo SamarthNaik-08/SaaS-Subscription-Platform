@@ -23,6 +23,8 @@ app:
       provider: mock
     multimodal:
       provider: mock
+    web-search:
+      provider: mock
 
 logging:
   level:
