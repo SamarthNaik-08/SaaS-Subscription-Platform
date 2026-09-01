@@ -9,7 +9,6 @@ import java.util.Map;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AiProviderFactory {
 
     private final GeminiAiProvider geminiAiProvider;
@@ -27,7 +26,7 @@ public class AiProviderFactory {
         }
 
         // 2. If explicit OpenAI model or provider requested
-        if (target.contains("gpt") || target.contains("openai") || target.contains("claude")) {
+        if (target.contains("gpt") || target.contains("openai")) {
             if (openAiProvider.isAvailable()) {
                 return openAiProvider;
             }
@@ -49,11 +48,11 @@ public class AiProviderFactory {
 
     public List<Map<String, String>> getAvailableModels() {
         return List.of(
-                Map.of("id", "gemini-2.0-flash", "name", "Gemini 2.0 Flash (Next-Gen)", "provider", "Google"),
-                Map.of("id", "gemini-1.5-flash", "name", "Gemini 1.5 Flash (Fast & Efficient)", "provider", "Google"),
-                Map.of("id", "gemini-1.5-pro", "name", "Gemini 1.5 Pro (Advanced Reasoning)", "provider", "Google"),
-                Map.of("id", "gpt-4o", "name", "GPT-4o (High-Throughput Multimodal)", "provider", "OpenAI"),
-                Map.of("id", "gpt-4o-mini", "name", "GPT-4o Mini (Cost-Optimized)", "provider", "OpenAI")
+                Map.of("id", "gemini-2.5-flash", "name", "Gemini 2.5 Flash (Fast & Next-Gen)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
+                Map.of("id", "gemini-2.5-pro", "name", "Gemini 2.5 Pro (Deep Reasoning)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
+                Map.of("id", "gemini-2.0-flash", "name", "Gemini 2.0 Flash (Fast)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
+                Map.of("id", "gpt-4o", "name", "GPT-4o (High-Throughput Multimodal)", "provider", "OpenAI", "available", String.valueOf(openAiProvider.isAvailable())),
+                Map.of("id", "gpt-4o-mini", "name", "GPT-4o Mini (Cost-Optimized)", "provider", "OpenAI", "available", String.valueOf(openAiProvider.isAvailable()))
         );
     }
 }

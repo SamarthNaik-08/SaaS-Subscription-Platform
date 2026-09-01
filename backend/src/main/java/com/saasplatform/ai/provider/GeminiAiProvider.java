@@ -49,7 +49,7 @@ public class GeminiAiProvider implements AiProvider {
     @Override
     public String generateText(String prompt, String model, Map<String, Object> options) {
         String targetModel = normalizeModel(model);
-        log.info("[Gemini Provider] Generating text with requested model: {}", targetModel);
+        log.info("[Gemini Provider] Generating text with model: {}", targetModel);
 
         Map<String, Object> requestBody = new HashMap<>();
         List<Map<String, Object>> contents = new ArrayList<>();
@@ -83,7 +83,7 @@ public class GeminiAiProvider implements AiProvider {
     @Override
     public String chat(List<ChatMessageDto> messages, String model, Map<String, Object> options) {
         String targetModel = normalizeModel(model);
-        log.info("[Gemini Provider] Chat invocation with requested model: {}", targetModel);
+        log.info("[Gemini Provider] Chat turn with model: {}", targetModel);
 
         Map<String, Object> requestBody = new HashMap<>();
         List<Map<String, Object>> contents = new ArrayList<>();
@@ -123,9 +123,9 @@ public class GeminiAiProvider implements AiProvider {
     private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody) {
         List<String[]> candidates = List.of(
                 new String[]{"v1beta", preferredModel},
+                new String[]{"v1beta", "gemini-2.5-flash"},
                 new String[]{"v1beta", "gemini-2.0-flash"},
-                new String[]{"v1beta", "gemini-1.5-flash"},
-                new String[]{"v1", "gemini-1.5-flash"}
+                new String[]{"v1beta", "gemini-2.5-pro"}
         );
 
         RestClientResponseException lastException = null;
@@ -152,7 +152,6 @@ public class GeminiAiProvider implements AiProvider {
                     log.warn("Gemini model {} on {} returned 404, attempting fallback...", modelName, apiVersion);
                     continue;
                 }
-                // If it's a 400 (bad key), 403 (forbidden), or 429 (Google rate limit), report directly
                 return handleGeminiApiError(e);
             } catch (Exception e) {
                 log.error("Network error calling Gemini API: {}", e.getMessage(), e);
@@ -192,17 +191,23 @@ public class GeminiAiProvider implements AiProvider {
                     """, e.getStatusCode(), detail);
         }
 
+        if (e.getStatusCode().value() == 404) {
+            return "⚠️ The selected Google Gemini model is currently unavailable on Google AI Studio. Please select another model.";
+        }
+
         return String.format("⚠️ **Google Gemini API Error (%s):** %s", e.getStatusCode(), detail);
     }
 
     private String normalizeModel(String model) {
         if (model == null || model.isBlank()) {
-            return "gemini-2.0-flash";
+            return "gemini-2.5-flash";
         }
+        if (model.contains("gemini-2.5-flash") || model.contains("gemini-3")) return "gemini-2.5-flash";
+        if (model.contains("gemini-2.5-pro")) return "gemini-2.5-pro";
         if (model.contains("gemini-2.0-flash")) return "gemini-2.0-flash";
-        if (model.contains("gemini-1.5-pro")) return "gemini-1.5-pro";
-        if (model.contains("gemini-1.5-flash")) return "gemini-1.5-flash";
-        return "gemini-2.0-flash";
+        if (model.contains("gemini-1.5-flash")) return "gemini-2.5-flash";
+        if (model.contains("gemini-1.5-pro")) return "gemini-2.5-pro";
+        return model.trim();
     }
 
     private String extractTextFromGeminiResponse(String responseJson) {

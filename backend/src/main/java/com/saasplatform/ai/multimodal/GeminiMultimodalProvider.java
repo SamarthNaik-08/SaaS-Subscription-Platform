@@ -39,7 +39,7 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
 
     @Override
     public String processMultimodal(String prompt, List<MultimodalAttachment> attachments, String model, Map<String, Object> options) {
-        String targetModel = (model != null && !model.isBlank()) ? model : "gemini-2.0-flash";
+        String targetModel = (model != null && !model.isBlank()) ? normalizeModel(model) : "gemini-2.5-flash";
         log.info("[Gemini Multimodal] Processing multimodal inference with model: {}, attachments: {}", 
                 targetModel, attachments != null ? attachments.size() : 0);
 
@@ -59,13 +59,11 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
             if (attachments != null) {
                 for (MultimodalAttachment att : attachments) {
                     if (att.isImage() || att.isPdf()) {
-                        // Binary inline data for Gemini
                         Map<String, Object> inlineData = new HashMap<>();
                         inlineData.put("mimeType", att.getContentType());
                         inlineData.put("data", att.getBase64Data());
                         parts.add(Map.of("inlineData", inlineData));
                     } else if (att.isTextDocument()) {
-                        // Text documents & source code formatted as markdown code blocks
                         String textSnippet = String.format("\n\n--- Attachment: %s (%s) ---\n%s\n--- End of %s ---\n",
                                 att.getFileName(), att.getContentType(), att.getTextContent(), att.getFileName());
                         parts.add(Map.of("text", textSnippet));
@@ -77,7 +75,6 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
             contents.add(userContent);
             requestBody.put("contents", contents);
 
-            // Optional System Instruction
             if (options != null && options.containsKey("systemInstruction") && options.get("systemInstruction") != null) {
                 String sysInst = options.get("systemInstruction").toString().trim();
                 if (!sysInst.isEmpty()) {
@@ -87,7 +84,6 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
                 }
             }
 
-            // Generation config
             Map<String, Object> genConfig = new HashMap<>();
             if (options != null && options.containsKey("temperature")) {
                 try {
@@ -97,7 +93,6 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
             genConfig.put("maxOutputTokens", 4096);
             requestBody.put("generationConfig", genConfig);
 
-            // Automatic multi-version / multi-model fallback execution
             return executeWithModelFallback(targetModel, requestBody);
 
         } catch (Exception e) {
@@ -109,9 +104,9 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
     private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody) {
         List<String[]> candidates = List.of(
                 new String[]{"v1beta", preferredModel},
+                new String[]{"v1beta", "gemini-2.5-flash"},
                 new String[]{"v1beta", "gemini-2.0-flash"},
-                new String[]{"v1beta", "gemini-1.5-flash"},
-                new String[]{"v1", "gemini-1.5-flash"}
+                new String[]{"v1beta", "gemini-2.5-pro"}
         );
 
         RestClientResponseException lastException = null;
@@ -166,7 +161,23 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
             detail = e.getMessage();
         }
 
+        if (e.getStatusCode().value() == 404) {
+            return "⚠️ The selected Google Gemini model is currently unavailable for multimodal inference. Please select another model.";
+        }
+
         return String.format("⚠️ **Google Gemini API Error (%s):** %s", e.getStatusCode(), detail);
+    }
+
+    private String normalizeModel(String model) {
+        if (model == null || model.isBlank()) {
+            return "gemini-2.5-flash";
+        }
+        if (model.contains("gemini-2.5-flash") || model.contains("gemini-3")) return "gemini-2.5-flash";
+        if (model.contains("gemini-2.5-pro")) return "gemini-2.5-pro";
+        if (model.contains("gemini-2.0-flash")) return "gemini-2.0-flash";
+        if (model.contains("gemini-1.5-flash")) return "gemini-2.5-flash";
+        if (model.contains("gemini-1.5-pro")) return "gemini-2.5-pro";
+        return model.trim();
     }
 
     private String extractTextFromGeminiResponse(String responseJson) {

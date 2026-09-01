@@ -53,28 +53,28 @@ import { speechService, SUPPORTED_LANGUAGES } from '../../services/speechService
 
 const AVAILABLE_MODELS = [
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
     category: 'Next-Gen',
     speed: 'Fast',
     provider: 'Google',
     description: 'Ultra-fast multimodal model with state-of-the-art response speed and high reasoning capability.',
   },
   {
-    id: 'gemini-1.5-flash',
-    name: 'Gemini 1.5 Flash',
-    category: 'Medium',
-    speed: 'Fast',
-    provider: 'Google',
-    description: 'Lightweight, high-speed model optimized for rapid assistance and coding tasks.',
-  },
-  {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
     category: 'Pro',
     speed: 'Reasoning',
     provider: 'Google',
     description: 'Deep analytical model with extended context window for complex synthesis.',
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    category: 'Fast',
+    speed: 'Fast',
+    provider: 'Google',
+    description: 'High-speed model optimized for rapid assistance and coding tasks.',
   },
   {
     id: 'gpt-4o',
@@ -92,20 +92,13 @@ const AVAILABLE_MODELS = [
     provider: 'OpenAI',
     description: 'Fast, cost-optimized model ideal for everyday conversational prompts.',
   },
-  {
-    id: 'claude-3-5-sonnet',
-    name: 'Claude 3.5 Sonnet (Thinking)',
-    category: 'Thinking',
-    speed: 'Deep',
-    provider: 'Anthropic',
-    description: 'Advanced structured reasoning and step-by-step problem deconstruction.',
-  },
 ];
 
 export const AIStudioPage = () => {
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState('gemini-2.0-flash');
+  const [model, setModel] = useState('gemini-2.5-flash');
+  const [modelsList, setModelsList] = useState(AVAILABLE_MODELS);
   const [messages, setMessages] = useState([
     {
       id: 'welcome-msg',
@@ -158,6 +151,7 @@ export const AIStudioPage = () => {
   const langMenuRef = useRef(null);
 
   useEffect(() => {
+    loadModels();
     loadUsage();
     return () => {
       speechService.abortRecognition();
@@ -184,6 +178,26 @@ export const AIStudioPage = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const loadModels = async () => {
+    try {
+      const res = await aiService.getModels();
+      if (res.success && res.data && res.data.length > 0) {
+        setModelsList(
+          res.data.map((m) => ({
+            id: m.id,
+            name: m.name || m.id,
+            category: m.provider || 'AI',
+            speed: m.id.includes('flash') ? 'Fast' : 'Pro',
+            provider: m.provider,
+            description: `High-throughput model powered by ${m.provider || 'AI engine'}`,
+          }))
+        );
+      }
+    } catch (e) {
+      console.warn('Failed to load models list from backend', e);
+    }
+  };
 
   const loadUsage = async () => {
     try {
@@ -823,7 +837,7 @@ export const AIStudioPage = () => {
   };
 
   const activeModeDetails = getModeDetails(activeMode);
-  const selectedModelObj = AVAILABLE_MODELS.find((m) => m.id === model) || AVAILABLE_MODELS[0];
+  const selectedModelObj = modelsList.find((m) => m.id === model) || modelsList[0] || AVAILABLE_MODELS[0];
   const currentLangObj = SUPPORTED_LANGUAGES.find((l) => l.code === speechLanguage) || SUPPORTED_LANGUAGES[0];
 
   return (
@@ -1631,7 +1645,7 @@ export const AIStudioPage = () => {
               </div>
 
               <div className="max-h-80 overflow-y-auto space-y-1">
-                {AVAILABLE_MODELS.map((item) => {
+                {modelsList.map((item) => {
                   const isSelected = model === item.id;
                   return (
                     <button

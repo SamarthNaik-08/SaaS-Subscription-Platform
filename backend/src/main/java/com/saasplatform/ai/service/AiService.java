@@ -40,7 +40,7 @@ public class AiService {
     public AiGenerateResponse generateText(UUID userId, AiGenerateRequest request) {
         String prompt = request.getPrompt();
         String model = (request.getModel() != null && !request.getModel().isBlank())
-                ? request.getModel() : "gemini-1.5-flash";
+                ? request.getModel() : "gemini-2.5-flash";
 
         String promptPreview = prompt.length() > 50 ? prompt.substring(0, 50) + "..." : prompt;
 
@@ -90,7 +90,7 @@ public class AiService {
     public AiGenerateResponse chat(UUID userId, AiChatRequest request) {
         List<ChatMessageDto> messages = request.getMessages();
         String model = (request.getModel() != null && !request.getModel().isBlank())
-                ? request.getModel() : "gemini-1.5-flash";
+                ? request.getModel() : "gemini-2.5-flash";
 
         String lastMessage = (messages != null && !messages.isEmpty())
                 ? messages.get(messages.size() - 1).getContent()
@@ -210,7 +210,7 @@ public class AiService {
 
         return AiGenerateResponse.builder()
                 .text(completionText)
-                .model(model != null ? model : "gemini-2.0-flash")
+                .model(model != null ? model : "gemini-2.5-flash")
                 .provider(multimodalProvider.getProviderName())
                 .promptTokens(promptTokens)
                 .completionTokens(completionTokens)
