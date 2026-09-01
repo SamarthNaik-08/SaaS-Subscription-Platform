@@ -1,20 +1,30 @@
 package com.saasplatform.ai.provider;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class AiProviderFactory {
+
+    private static final Logger log = LoggerFactory.getLogger(AiProviderFactory.class);
 
     private final GeminiAiProvider geminiAiProvider;
     private final OpenAiProvider openAiProvider;
     private final MockAiProvider mockAiProvider;
+
+    public AiProviderFactory(
+            GeminiAiProvider geminiAiProvider,
+            OpenAiProvider openAiProvider,
+            MockAiProvider mockAiProvider
+    ) {
+        this.geminiAiProvider = geminiAiProvider;
+        this.openAiProvider = openAiProvider;
+        this.mockAiProvider = mockAiProvider;
+    }
 
     public AiProvider getProvider(String modelOrProvider) {
         String target = modelOrProvider != null ? modelOrProvider.toLowerCase() : "";
