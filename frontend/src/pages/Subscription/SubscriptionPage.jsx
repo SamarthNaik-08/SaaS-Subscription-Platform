@@ -1,16 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Check,
-  Zap,
-  Sparkles,
-  ShieldCheck,
-  CreditCard,
-  AlertCircle,
-  Clock,
-  ArrowRight,
-  RefreshCw,
-  XCircle,
-} from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import { billingService } from '../../services/billingService';
 import { useAuth } from '../../context/AuthContext';
 

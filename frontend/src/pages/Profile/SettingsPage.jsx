@@ -1,15 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  User,
-  Lock,
-  ShieldAlert,
-  Smartphone,
-  Check,
-  AlertTriangle,
-  RefreshCw,
-  LogOut,
-  Save,
-} from 'lucide-react';
+import { User, Lock, Smartphone, LogOut, Save } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { userService } from '../../services/userService';
 

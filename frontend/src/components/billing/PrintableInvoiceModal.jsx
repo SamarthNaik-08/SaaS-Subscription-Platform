@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, X, Download, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Printer, X, CheckCircle2 } from 'lucide-react';
 
 export const PrintableInvoiceModal = ({ invoice, isOpen, onClose }) => {
   if (!isOpen || !invoice) return null;

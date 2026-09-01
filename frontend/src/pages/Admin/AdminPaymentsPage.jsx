@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, Receipt, Search, Download } from 'lucide-react';
+import { CreditCard } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 
 export const AdminPaymentsPage = () => {

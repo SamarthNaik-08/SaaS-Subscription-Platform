@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { Menu, Bell, Sparkles, Zap, ShieldAlert, ArrowUpRight } from 'lucide-react';
+import { Menu, Bell, Sparkles, Zap, ArrowUpRight } from 'lucide-react';
 import Sidebar from '../components/sidebar/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { notificationService } from '../services/notificationService';

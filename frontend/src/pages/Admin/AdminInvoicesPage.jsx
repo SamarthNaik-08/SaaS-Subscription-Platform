@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Receipt, Eye, Search } from 'lucide-react';
+import { Receipt } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 
 export const AdminInvoicesPage = () => {

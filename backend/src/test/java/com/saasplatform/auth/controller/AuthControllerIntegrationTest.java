@@ -1,7 +1,6 @@
 package com.saasplatform.auth.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.saasplatform.auth.dto.LoginRequest;
 import com.saasplatform.auth.dto.RefreshTokenRequest;
 import com.saasplatform.auth.dto.RegisterRequest;
 import com.saasplatform.auth.service.AuthService;

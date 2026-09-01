@@ -1,15 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Receipt,
-  Download,
-  Eye,
-  CreditCard,
-  Calendar,
-  CheckCircle2,
-  FileText,
-  X,
-  Printer,
-} from 'lucide-react';
+import { Receipt, Eye, X, Printer } from 'lucide-react';
 import { billingService } from '../../services/billingService';
 
 export const InvoicesPage = () => {

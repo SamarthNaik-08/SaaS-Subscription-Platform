@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, Server, Database, HardDrive, RefreshCw, CheckCircle2, Clock } from 'lucide-react';
+import { Cpu, HardDrive, RefreshCw } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 
 export const AdminHealthPage = () => {

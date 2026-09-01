@@ -1,19 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import {
-  Sparkles,
-  Zap,
-  Activity,
-  CreditCard,
-  Receipt,
-  ArrowRight,
-  TrendingUp,
-  ShieldCheck,
-  CheckCircle2,
-  Clock,
-  Send,
-  Lock,
-} from 'lucide-react';
+import { Sparkles, Zap, Activity, CreditCard, Receipt, ArrowRight, ShieldCheck, Clock, Send } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usageService } from '../../services/usageService';
 import { billingService } from '../../services/billingService';

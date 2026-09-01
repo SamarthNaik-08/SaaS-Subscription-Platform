@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Filter, RefreshCw, Search } from 'lucide-react';
+import { ShieldCheck, Filter } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 
 export const AdminAuditLogsPage = () => {

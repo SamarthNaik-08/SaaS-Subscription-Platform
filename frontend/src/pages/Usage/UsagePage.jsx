@@ -1,16 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Activity,
-  Zap,
-  HardDrive,
-  AlertTriangle,
-  Clock,
-  Sparkles,
-  Calendar,
-  Layers,
-  ArrowUpRight,
-  TrendingUp,
-} from 'lucide-react';
+import { Activity, HardDrive, AlertTriangle, Clock, Sparkles, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { usageService } from '../../services/usageService';
 import { billingService } from '../../services/billingService';

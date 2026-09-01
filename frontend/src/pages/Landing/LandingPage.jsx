@@ -1,17 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import {
-  Sparkles,
-  Shield,
-  Zap,
-  Bot,
-  Database,
-  ArrowRight,
-  CheckCircle2,
-  Lock,
-  Layers,
-  Activity,
-} from 'lucide-react';
+import { Sparkles, Bot, ArrowRight, CheckCircle2, Lock, Layers } from 'lucide-react';
 import { PLANS } from '../../utils/constants';
 
 export const LandingPage = () => {

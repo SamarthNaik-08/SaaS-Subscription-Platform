@@ -1,17 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  TrendingUp,
-  Users,
-  CreditCard,
-  Sparkles,
-  Activity,
-  ShieldCheck,
-  PackageCheck,
-  AlertTriangle,
-  ArrowUpRight,
-  Clock,
-  DollarSign,
-} from 'lucide-react';
+import { TrendingUp, Users, CreditCard, Sparkles, ShieldCheck, DollarSign } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
 

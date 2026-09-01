@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Mail, Shield, Calendar, CheckCircle2 } from 'lucide-react';
+import { User, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 export const ProfilePage = () => {

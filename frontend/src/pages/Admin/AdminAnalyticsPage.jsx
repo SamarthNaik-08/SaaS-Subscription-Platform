@@ -1,14 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  TrendingUp,
-  DollarSign,
-  Users,
-  Sparkles,
-  PieChart,
-  Percent,
-  Layers,
-  ArrowUpRight,
-} from 'lucide-react';
+import { TrendingUp, Layers } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 
 export const AdminAnalyticsPage = () => {
