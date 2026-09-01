@@ -23,6 +23,7 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Terminal,
   Compass,
   FileCode,
@@ -41,17 +42,70 @@ import {
   Award,
   BarChart3,
   Languages,
+  Info,
+  Zap,
+  Cpu,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { aiService } from '../../services/aiService';
 import { usageService } from '../../services/usageService';
 import { speechService, SUPPORTED_LANGUAGES } from '../../services/speechService';
 
+const AVAILABLE_MODELS = [
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    category: 'Next-Gen',
+    speed: 'Fast',
+    provider: 'Google',
+    description: 'Ultra-fast multimodal model with state-of-the-art response speed and high reasoning capability.',
+  },
+  {
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash',
+    category: 'Medium',
+    speed: 'Fast',
+    provider: 'Google',
+    description: 'Lightweight, high-speed model optimized for rapid assistance and coding tasks.',
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    category: 'Pro',
+    speed: 'Reasoning',
+    provider: 'Google',
+    description: 'Deep analytical model with extended context window for complex synthesis.',
+  },
+  {
+    id: 'gpt-4o',
+    name: 'GPT-4o (Multimodal)',
+    category: 'Omni',
+    speed: 'High-Perf',
+    provider: 'OpenAI',
+    description: 'Flagship multimodal reasoning model for cross-domain intelligence.',
+  },
+  {
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o Mini',
+    category: 'Mini',
+    speed: 'Fast',
+    provider: 'OpenAI',
+    description: 'Fast, cost-optimized model ideal for everyday conversational prompts.',
+  },
+  {
+    id: 'claude-3-5-sonnet',
+    name: 'Claude 3.5 Sonnet (Thinking)',
+    category: 'Thinking',
+    speed: 'Deep',
+    provider: 'Anthropic',
+    description: 'Advanced structured reasoning and step-by-step problem deconstruction.',
+  },
+];
+
 export const AIStudioPage = () => {
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState('');
   const [model, setModel] = useState('gemini-2.0-flash');
-  const [models, setModels] = useState([]);
   const [messages, setMessages] = useState([
     {
       id: 'welcome-msg',
@@ -73,7 +127,10 @@ export const AIStudioPage = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
 
-  // Phase 5E Voice Input / Speech-to-Text State
+  // Model Selector Popover State (Prompt Bar)
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+
+  // Voice Input / Speech-to-Text State
   const [isListening, setIsListening] = useState(false);
   const [speechLanguage, setSpeechLanguage] = useState(speechService.getSelectedLanguage());
   const [isSpeechSupported] = useState(speechService.isSpeechRecognitionSupported());
@@ -97,10 +154,10 @@ export const AIStudioPage = () => {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const actionMenuRef = useRef(null);
+  const modelMenuRef = useRef(null);
   const langMenuRef = useRef(null);
 
   useEffect(() => {
-    loadModels();
     loadUsage();
     return () => {
       speechService.abortRecognition();
@@ -111,11 +168,14 @@ export const AIStudioPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Click outside to close action menu and language menu
+  // Click outside to close menus
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (actionMenuRef.current && !actionMenuRef.current.contains(e.target)) {
         setIsActionMenuOpen(false);
+      }
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target)) {
+        setIsModelMenuOpen(false);
       }
       if (langMenuRef.current && !langMenuRef.current.contains(e.target)) {
         setIsLangMenuOpen(false);
@@ -124,17 +184,6 @@ export const AIStudioPage = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const loadModels = async () => {
-    try {
-      const res = await aiService.getModels();
-      if (res.success && res.data) {
-        setModels(res.data);
-      }
-    } catch (e) {
-      console.warn('Failed to load models list', e);
-    }
-  };
 
   const loadUsage = async () => {
     try {
@@ -145,7 +194,6 @@ export const AIStudioPage = () => {
     }
   };
 
-  // Phase 5E Voice Recognition Toggle Handler
   const handleToggleVoice = () => {
     if (!isSpeechSupported) {
       setErrorMsg("Voice input isn't supported in this browser. Please try Chrome or a Web Speech-compatible browser.");
@@ -195,7 +243,6 @@ export const AIStudioPage = () => {
     }
   };
 
-  // File Upload Handling
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -223,7 +270,6 @@ export const AIStudioPage = () => {
     });
   };
 
-  // Workspace Library Files
   const libraryFiles = [
     { name: 'architecture_spec.md', size: '14.2 KB', type: 'doc' },
     { name: 'schema_design.sql', size: '8.4 KB', type: 'code' },
@@ -269,7 +315,7 @@ export const AIStudioPage = () => {
       id: 'image',
       icon: ImageIcon,
       title: 'Create image',
-      subtitle: 'Visualize anything',
+      subtitle: 'Visualize anything with text-to-image',
       action: () => {
         setActiveMode('image');
         setIsActionMenuOpen(false);
@@ -279,7 +325,7 @@ export const AIStudioPage = () => {
       id: 'web-search',
       icon: Globe,
       title: 'Web search',
-      subtitle: 'Find real-time news and info with citations',
+      subtitle: 'Find real-time news & citations',
       action: () => {
         setActiveMode('web-search');
         setIsActionMenuOpen(false);
@@ -289,7 +335,7 @@ export const AIStudioPage = () => {
       id: 'deep-research',
       icon: Compass,
       title: 'Deep research',
-      subtitle: 'Multi-query empirical synthesis & report',
+      subtitle: 'Multi-query empirical synthesis report',
       action: () => {
         setActiveMode('deep-research');
         setIsActionMenuOpen(false);
@@ -299,7 +345,7 @@ export const AIStudioPage = () => {
       id: 'developer',
       icon: Terminal,
       title: 'OpenAI Developers',
-      subtitle: 'Develop AI apps, agents, and ChatGPT Apps with OpenAI best practices',
+      subtitle: 'Develop AI apps, agents, and ChatGPT apps',
       action: () => {
         setActiveMode('developer');
         setIsActionMenuOpen(false);
@@ -320,7 +366,6 @@ export const AIStudioPage = () => {
     }));
   };
 
-  // Image Download Helper
   const handleDownloadImage = async (url, filename = 'nexus-ai-image.png') => {
     try {
       if (url.startsWith('data:')) {
@@ -347,7 +392,6 @@ export const AIStudioPage = () => {
     }
   };
 
-  // Helper to render text with clickable citation badges [S1], [S2]
   const renderFormattedContentWithCitations = (content, citations = [], sources = []) => {
     if (!content) return null;
 
@@ -416,7 +460,6 @@ export const AIStudioPage = () => {
 
     const messageId = Math.random().toString(36).substring(2, 9);
 
-    // Build user message
     const userMsg = {
       id: 'user-' + messageId,
       role: 'user',
@@ -447,7 +490,6 @@ export const AIStudioPage = () => {
     const startTime = performance.now();
 
     try {
-      // 1. Image Generation Workflow
       if (activeMode === 'image') {
         const res = await aiService.generateImage(targetPrompt, {
           aspectRatio: imageAspectRatio,
@@ -485,7 +527,6 @@ export const AIStudioPage = () => {
           }
         }
       } else if (activeMode === 'deep-research') {
-        // 2. Deep Research Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Conduct rigorous multi-perspective reasoning and empirical cross-verification.';
@@ -541,7 +582,6 @@ export const AIStudioPage = () => {
           }
         }
       } else if (activeMode === 'web-search') {
-        // 3. Web Search Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Provide structured multi-perspective analysis and reasoning.';
@@ -605,7 +645,6 @@ export const AIStudioPage = () => {
           }
         }
       } else if (hasFiles) {
-        // 4. Multimodal Workflow
         const formData = new FormData();
         formData.append('prompt', targetPrompt || 'Please analyze and summarize the attached files in detail.');
         formData.append('model', model);
@@ -663,7 +702,6 @@ export const AIStudioPage = () => {
           }
         }
       } else {
-        // 5. Standard Text / Chat Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Provide deep, structured step-by-step reasoning.';
@@ -785,11 +823,11 @@ export const AIStudioPage = () => {
   };
 
   const activeModeDetails = getModeDetails(activeMode);
-  const aiQuota = currentUsage?.metrics?.AI_REQUEST;
+  const selectedModelObj = AVAILABLE_MODELS.find((m) => m.id === model) || AVAILABLE_MODELS[0];
   const currentLangObj = SUPPORTED_LANGUAGES.find((l) => l.code === speechLanguage) || SUPPORTED_LANGUAGES[0];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 max-w-6xl mx-auto">
       {/* Hidden File Input */}
       <input
         type="file"
@@ -847,48 +885,9 @@ export const AIStudioPage = () => {
         </div>
       )}
 
-      {/* Top Banner & Quota Meter */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100">AI Studio Workspace</h1>
-              <p className="text-xs text-slate-400">Multi-tool intelligent inference, image synthesis, voice input & deep research workbench</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Quota Status Card */}
-        {aiQuota && (
-          <div className="w-full md:w-auto flex items-center gap-4 bg-slate-950/70 px-4 py-3 rounded-xl border border-slate-800/80">
-            <div className="text-left">
-              <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Remaining Quota</p>
-              <p className="text-sm font-bold text-slate-200">
-                <span className="text-indigo-400">{aiQuota.remaining}</span> / {aiQuota.limit} requests
-              </p>
-            </div>
-            <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${
-                  aiQuota.percentage >= 90
-                    ? 'bg-rose-500'
-                    : aiQuota.percentage >= 75
-                    ? 'bg-amber-500'
-                    : 'bg-gradient-to-r from-indigo-500 to-purple-500'
-                }`}
-                style={{ width: `${Math.min(100, aiQuota.percentage)}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Error Alert Banner */}
       {errorMsg && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-4 animate-in fade-in">
           <div className="flex items-center space-x-3 text-rose-300 text-sm">
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
             <span>{errorMsg}</span>
@@ -911,198 +910,24 @@ export const AIStudioPage = () => {
         </div>
       )}
 
-      {/* Main Studio Interface */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left / Settings Sidebar */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                <Sliders className="w-3.5 h-3.5 text-indigo-400" />
-                {activeMode === 'image' ? 'Image Engine Config' : 'Model & Config'}
-              </h2>
+      {/* Main Studio Canvas (Full Width Chat & Prompt Bar) */}
+      <div className="flex flex-col h-[calc(100vh-140px)] min-h-[620px] rounded-2xl bg-slate-900/60 border border-slate-800/80 shadow-2xl overflow-hidden relative backdrop-blur-sm">
+        
+        {/* Top Mini Toolbar */}
+        <div className="px-5 py-3 border-b border-slate-800/80 bg-slate-950/40 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+              <Sparkles className="w-4 h-4" />
             </div>
-
-            {/* If in Image Mode, show specialized Image Controls */}
-            {activeMode === 'image' ? (
-              <div className="space-y-4 animate-in fade-in">
-                {/* Aspect Ratio */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300 flex items-center justify-between">
-                    <span>Aspect Ratio</span>
-                    <span className="text-[10px] text-amber-400 font-mono">{imageAspectRatio}</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { id: '1:1', label: '1:1 Square' },
-                      { id: '16:9', label: '16:9 Cinema' },
-                      { id: '9:16', label: '9:16 Mobile' },
-                      { id: '4:3', label: '4:3 Classic' },
-                    ].map((ratio) => (
-                      <button
-                        key={ratio.id}
-                        type="button"
-                        onClick={() => setImageAspectRatio(ratio.id)}
-                        className={`p-2 rounded-xl text-xs font-medium border text-center transition-all ${
-                          imageAspectRatio === ratio.id
-                            ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm'
-                            : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        {ratio.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Style Preset */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Style Aesthetic</label>
-                  <select
-                    value={imageStylePreset}
-                    onChange={(e) => setImageStylePreset(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-slate-200 focus:outline-none focus:border-amber-500 transition-colors"
-                  >
-                    <option value="Cinematic">Cinematic (Dramatic Lighting)</option>
-                    <option value="Photorealistic">Photorealistic (Ultra Detail)</option>
-                    <option value="Digital Art">Digital Art & Illustration</option>
-                    <option value="Anime">Anime / Manga Concept</option>
-                    <option value="Isometric 3D">Isometric 3D Render</option>
-                    <option value="Cyberpunk">Cyberpunk Neon</option>
-                    <option value="Fantasy">Epic Fantasy</option>
-                  </select>
-                </div>
-              </div>
-            ) : (
-              /* Standard LLM Model Controls */
-              <div className="space-y-4 animate-in fade-in">
-                {/* Model Selector */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">Active Model</label>
-                  <select
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs font-medium text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
-                  >
-                    {models.length > 0 ? (
-                      models.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="gemini-2.0-flash">Gemini 2.0 Flash (Next-Gen)</option>
-                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Fast)</option>
-                        <option value="gemini-1.5-pro">Gemini 1.5 Pro (Advanced)</option>
-                        <option value="gpt-4o">GPT-4o (Multimodal)</option>
-                        <option value="gpt-4o-mini">GPT-4o Mini (Efficient)</option>
-                      </>
-                    )}
-                  </select>
-                </div>
-
-                {/* Temperature Slider */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-slate-300">Creativity (Temp)</label>
-                    <span className="text-xs font-mono text-indigo-400">{temperature}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={temperature}
-                    onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                    className="w-full accent-indigo-500"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                    <span>Deterministic</span>
-                    <span>Creative</span>
-                  </div>
-                </div>
-
-                {/* System Instruction */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-300">System Instruction</label>
-                  <textarea
-                    value={systemInstruction}
-                    onChange={(e) => setSystemInstruction(e.target.value)}
-                    rows={3}
-                    placeholder="Optional system context (e.g. You are a senior software architect...)"
-                    className="w-full p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors resize-none placeholder:text-slate-600"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Quick Tools & Mode Switcher */}
-            <div className="space-y-2 pt-2 border-t border-slate-800/80">
-              <label className="text-xs font-medium text-slate-400 flex items-center justify-between">
-                <span>Quick Tools</span>
-                {activeMode && (
-                  <button
-                    onClick={() => setActiveMode(null)}
-                    className="text-[10px] text-rose-400 hover:underline"
-                  >
-                    Reset Mode
-                  </button>
-                )}
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setActiveMode(activeMode === 'image' ? null : 'image')}
-                  className={`p-2 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all ${
-                    activeMode === 'image'
-                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ImageIcon className="w-3.5 h-3.5" />
-                  <span>Image</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveMode(activeMode === 'web-search' ? null : 'web-search')}
-                  className={`p-2 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all ${
-                    activeMode === 'web-search'
-                      ? 'bg-sky-500/20 border-sky-500/50 text-sky-300 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>Search</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveMode(activeMode === 'deep-research' ? null : 'deep-research')}
-                  className={`p-2 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all ${
-                    activeMode === 'deep-research'
-                      ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Compass className="w-3.5 h-3.5" />
-                  <span>Research</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsThinkActive(!isThinkActive)}
-                  className={`p-2 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all ${
-                    isThinkActive
-                      ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Brain className="w-3.5 h-3.5" />
-                  <span>Think: {isThinkActive ? 'ON' : 'OFF'}</span>
-                </button>
-              </div>
+            <div>
+              <span className="text-xs font-bold text-slate-200">AI Studio</span>
+              <span className="text-[11px] text-slate-500 ml-2">
+                {activeModeDetails ? activeModeDetails.title : selectedModelObj.name}
+              </span>
             </div>
+          </div>
 
-            {/* Clear Chat Button */}
+          <div className="flex items-center space-x-2">
             <button
               onClick={() => {
                 setMessages([
@@ -1121,328 +946,411 @@ export const AIStudioPage = () => {
                   setIsListening(false);
                 }
               }}
-              className="w-full flex items-center justify-center space-x-2 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 bg-slate-950/60 hover:bg-slate-800 border border-slate-800 transition-all"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800 border border-slate-800 transition-all flex items-center gap-1.5"
+              title="Reset Conversation"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Clear Session</span>
+              <RefreshCw className="w-3 h-3" />
+              <span>Clear Chat</span>
             </button>
           </div>
         </div>
 
-        {/* Right / Chat Stream & Advanced Action Prompt Bar */}
-        <div className="lg:col-span-3 flex flex-col h-[720px] rounded-2xl bg-slate-900/50 border border-slate-800 shadow-xl overflow-hidden relative">
-          
-          {/* Messages Stream */}
-          <div className="flex-1 p-6 space-y-6 overflow-y-auto">
-            {messages.map((msg, index) => {
-              const isUser = msg.role === 'user';
-              const modeInfo = msg.mode ? getModeDetails(msg.mode) : null;
-              const hasReasoning = Boolean(msg.reasoningSteps?.length);
-              const isThoughtOpen = Boolean(expandedThoughts[index]);
+        {/* Messages Stream */}
+        <div className="flex-1 p-6 space-y-6 overflow-y-auto">
+          {messages.map((msg, index) => {
+            const isUser = msg.role === 'user';
+            const modeInfo = msg.mode ? getModeDetails(msg.mode) : null;
+            const hasReasoning = Boolean(msg.reasoningSteps?.length);
+            const isThoughtOpen = Boolean(expandedThoughts[index]);
 
-              return (
+            return (
+              <div
+                key={msg.id || index}
+                className={`flex items-start gap-3.5 ${
+                  isUser ? 'flex-row-reverse' : 'flex-row'
+                }`}
+              >
                 <div
-                  key={msg.id || index}
-                  className={`flex items-start gap-3.5 ${
-                    isUser ? 'flex-row-reverse' : 'flex-row'
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
+                    isUser
+                      ? 'bg-gradient-to-tr from-indigo-600 to-purple-600 text-white'
+                      : msg.isImage
+                      ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                      : msg.isDeepResearch
+                      ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
+                      : msg.isSearch
+                      ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
+                      : 'bg-slate-800 text-indigo-400 border border-slate-700'
                   }`}
                 >
-                  <div
-                    className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
-                      isUser
-                        ? 'bg-gradient-to-tr from-indigo-600 to-purple-600 text-white'
+                  {isUser ? (
+                    <User className="w-4 h-4" />
+                  ) : msg.isImage ? (
+                    <Wand2 className="w-4 h-4" />
+                  ) : msg.isDeepResearch ? (
+                    <Compass className="w-4 h-4" />
+                  ) : msg.isSearch ? (
+                    <Globe className="w-4 h-4" />
+                  ) : (
+                    <Bot className="w-4 h-4" />
+                  )}
+                </div>
+
+                <div className={`space-y-2 max-w-[85%] ${isUser ? 'text-right' : 'text-left'}`}>
+                  {/* Header line */}
+                  <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                    <span className="font-semibold text-slate-300">
+                      {isUser
+                        ? 'You'
                         : msg.isImage
-                        ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                        ? 'Nexus Image AI'
                         : msg.isDeepResearch
-                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
+                        ? `${msg.model || 'Nexus AI'} • Deep Research`
                         : msg.isSearch
-                        ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
-                        : 'bg-slate-800 text-indigo-400 border border-slate-700'
-                    }`}
-                  >
-                    {isUser ? (
-                      <User className="w-4 h-4" />
-                    ) : msg.isImage ? (
-                      <Wand2 className="w-4 h-4" />
-                    ) : msg.isDeepResearch ? (
-                      <Compass className="w-4 h-4" />
-                    ) : msg.isSearch ? (
-                      <Globe className="w-4 h-4" />
-                    ) : (
-                      <Bot className="w-4 h-4" />
+                        ? `${msg.model || 'Nexus AI'} • Web Search`
+                        : msg.model || 'Nexus AI'}
+                    </span>
+                    {msg.isImage && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border text-amber-400 border-amber-500/30 bg-amber-500/10">
+                        {msg.stylePreset || 'Image'} • {msg.aspectRatio || '1:1'}
+                      </span>
+                    )}
+                    {msg.isDeepResearch && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border text-purple-400 border-purple-500/30 bg-purple-500/10">
+                        {msg.totalQueriesExecuted || 4} Queries • {msg.sources?.length || 0} Sources
+                      </span>
+                    )}
+                    {modeInfo && !msg.isImage && !msg.isDeepResearch && (
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${modeInfo.color}`}>
+                        {modeInfo.title}
+                      </span>
+                    )}
+                    <span>•</span>
+                    <span>{msg.timestamp}</span>
+                    {msg.latency && (
+                      <>
+                        <span>•</span>
+                        <span className="font-mono text-emerald-400">{msg.latency}s</span>
+                      </>
                     )}
                   </div>
 
-                  <div className={`space-y-2 max-w-[85%] ${isUser ? 'text-right' : 'text-left'}`}>
-                    {/* Header line */}
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                      <span className="font-semibold text-slate-300">
-                        {isUser
-                          ? 'You'
-                          : msg.isImage
-                          ? 'Nexus Image AI'
-                          : msg.isDeepResearch
-                          ? `${msg.model || 'Nexus AI'} • Deep Research`
-                          : msg.isSearch
-                          ? `${msg.model || 'Nexus AI'} • Web Search`
-                          : msg.model || 'Nexus AI'}
-                      </span>
-                      {msg.isImage && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border text-amber-400 border-amber-500/30 bg-amber-500/10">
-                          {msg.stylePreset || 'Image'} • {msg.aspectRatio || '1:1'}
-                        </span>
-                      )}
-                      {msg.isDeepResearch && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border text-purple-400 border-purple-500/30 bg-purple-500/10">
-                          {msg.totalQueriesExecuted || 4} Queries • {msg.sources?.length || 0} Sources
-                        </span>
-                      )}
-                      {modeInfo && !msg.isImage && !msg.isDeepResearch && (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${modeInfo.color}`}>
-                          {modeInfo.title}
-                        </span>
-                      )}
-                      <span>•</span>
-                      <span>{msg.timestamp}</span>
-                      {msg.latency && (
-                        <>
-                          <span>•</span>
-                          <span className="font-mono text-emerald-400">{msg.latency}s</span>
-                        </>
+                  {/* Attachments preview if present on user message */}
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-end mb-2">
+                      {msg.attachments.map((att, attIdx) => (
+                        <div
+                          key={attIdx}
+                          className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs flex items-center gap-2 text-slate-200"
+                        >
+                          {att.isImage && att.previewUrl ? (
+                            <img
+                              src={att.previewUrl}
+                              alt={att.name}
+                              className="w-8 h-8 rounded-lg object-cover border border-slate-700"
+                            />
+                          ) : (
+                            <FileText className="w-4 h-4 text-indigo-400" />
+                          )}
+                          <div className="text-left">
+                            <p className="text-[11px] font-medium max-w-[120px] truncate">{att.name}</p>
+                            <p className="text-[9px] text-slate-500">{att.size}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Safe Reasoning / Thinking Status Accordion */}
+                  {!isUser && hasReasoning && (
+                    <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 overflow-hidden mb-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleThoughtExpansion(index)}
+                        className="w-full px-3 py-2 flex items-center justify-between text-xs font-semibold text-indigo-300 hover:bg-indigo-950/40 transition-colors"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Brain className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>
+                            Thought Process {msg.reasoningTime ? `(${msg.reasoningTime}s)` : ''}
+                          </span>
+                        </div>
+                        {isThoughtOpen ? (
+                          <ChevronUp className="w-3.5 h-3.5 text-indigo-400" />
+                        ) : (
+                          <ChevronDown className="w-3.5 h-3.5 text-indigo-400" />
+                        )}
+                      </button>
+                      {isThoughtOpen && (
+                        <div className="p-3 pt-1 text-[11px] text-slate-300 border-t border-indigo-500/10 space-y-1.5">
+                          {msg.reasoningSteps.map((step, sIdx) => (
+                            <div key={sIdx} className="flex items-center gap-2 text-slate-400">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                              <span>{step}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
+                  )}
 
-                    {/* Attachments preview if present on user message */}
-                    {msg.attachments && msg.attachments.length > 0 && (
-                      <div className="flex flex-wrap gap-2 justify-end mb-2">
-                        {msg.attachments.map((att, attIdx) => (
-                          <div
-                            key={attIdx}
-                            className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs flex items-center gap-2 text-slate-200"
-                          >
-                            {att.isImage && att.previewUrl ? (
-                              <img
-                                src={att.previewUrl}
-                                alt={att.name}
-                                className="w-8 h-8 rounded-lg object-cover border border-slate-700"
-                              />
-                            ) : (
-                              <FileText className="w-4 h-4 text-indigo-400" />
-                            )}
-                            <div className="text-left">
-                              <p className="text-[11px] font-medium max-w-[120px] truncate">{att.name}</p>
-                              <p className="text-[9px] text-slate-500">{att.size}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Safe Reasoning / Thinking Status Accordion */}
-                    {!isUser && hasReasoning && (
-                      <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 overflow-hidden mb-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleThoughtExpansion(index)}
-                          className="w-full px-3 py-2 flex items-center justify-between text-xs font-semibold text-indigo-300 hover:bg-indigo-950/40 transition-colors"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <Brain className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>
-                              Thought Process {msg.reasoningTime ? `(${msg.reasoningTime}s)` : ''}
-                            </span>
-                          </div>
-                          {isThoughtOpen ? (
-                            <ChevronUp className="w-3.5 h-3.5 text-indigo-400" />
-                          ) : (
-                            <ChevronDown className="w-3.5 h-3.5 text-indigo-400" />
-                          )}
-                        </button>
-                        {isThoughtOpen && (
-                          <div className="p-3 pt-1 text-[11px] text-slate-300 border-t border-indigo-500/10 space-y-1.5">
-                            {msg.reasoningSteps.map((step, sIdx) => (
-                              <div key={sIdx} className="flex items-center gap-2 text-slate-400">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                                <span>{step}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Image Result Card */}
-                    {msg.isImage ? (
-                      <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl space-y-3 max-w-lg">
-                        <div
-                          onClick={() => setLightboxImage(msg)}
-                          className="relative group rounded-xl overflow-hidden border border-slate-800/80 bg-slate-900 cursor-pointer flex items-center justify-center"
-                        >
-                          <img
-                            src={msg.imageUrl}
-                            alt={msg.prompt || 'Generated AI Artwork'}
-                            className="w-full h-auto max-h-96 object-contain rounded-xl transition-transform duration-300 group-hover:scale-[1.02]"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
-                            <span className="p-2 rounded-full bg-slate-900/80 text-white shadow-md">
-                              <Maximize2 className="w-4 h-4" />
-                            </span>
-                          </div>
-                        </div>
-
-                        {msg.revisedPrompt && (
-                          <p className="text-xs text-slate-300 leading-relaxed px-1">
-                            <span className="text-slate-500 font-medium">Prompt: </span>
-                            "{msg.prompt}"
-                          </p>
-                        )}
-
-                        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                          <span className="font-mono text-[11px] text-slate-500">
-                            {msg.provider || 'Nexus Image'}
+                  {/* Image Result Card */}
+                  {msg.isImage ? (
+                    <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl space-y-3 max-w-lg">
+                      <div
+                        onClick={() => setLightboxImage(msg)}
+                        className="relative group rounded-xl overflow-hidden border border-slate-800/80 bg-slate-900 cursor-pointer flex items-center justify-center"
+                      >
+                        <img
+                          src={msg.imageUrl}
+                          alt={msg.prompt || 'Generated AI Artwork'}
+                          className="w-full h-auto max-h-96 object-contain rounded-xl transition-transform duration-300 group-hover:scale-[1.02]"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
+                          <span className="p-2 rounded-full bg-slate-900/80 text-white shadow-md">
+                            <Maximize2 className="w-4 h-4" />
                           </span>
-                          <div className="flex items-center space-x-1.5">
-                            <button
-                              onClick={() => handleSend(null, msg.prompt)}
-                              className="px-2 py-1 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 flex items-center space-x-1 transition-all"
-                              title="Regenerate Image"
-                            >
-                              <RotateCcw className="w-3 h-3 text-amber-400" />
-                              <span className="text-[10px] font-medium">Regenerate</span>
-                            </button>
-                            <button
-                              onClick={() => handleDownloadImage(msg.imageUrl)}
-                              className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
-                              title="Download Image"
-                            >
-                              <Download className="w-3.5 h-3.5 text-indigo-400" />
-                            </button>
-                            <button
-                              onClick={() => handleCopy(msg.imageUrl, index)}
-                              className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
-                              title="Copy URL"
-                            >
-                              {copiedIndex === index ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => deleteMessage(msg.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
-                              title="Delete Message"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
                         </div>
                       </div>
-                    ) : msg.isDeepResearch ? (
-                      /* Deep Research Report Card */
-                      <div className="p-5 rounded-2xl bg-slate-950/90 border border-purple-500/30 text-slate-200 shadow-2xl space-y-4">
-                        {/* Report Header */}
-                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                          <div className="flex items-center space-x-2.5">
-                            <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40">
-                              <Compass className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-slate-100">Deep Research Synthesis Report</h3>
-                              <p className="text-[11px] text-purple-300/80 font-medium truncate max-w-md">
-                                Topic: {msg.topic}
-                              </p>
-                            </div>
+
+                      {msg.revisedPrompt && (
+                        <p className="text-xs text-slate-300 leading-relaxed px-1">
+                          <span className="text-slate-500 font-medium">Prompt: </span>
+                          "{msg.prompt}"
+                        </p>
+                      )}
+
+                      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                        <span className="font-mono text-[11px] text-slate-500">
+                          {msg.provider || 'Nexus Image'}
+                        </span>
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            onClick={() => handleSend(null, msg.prompt)}
+                            className="px-2 py-1 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 flex items-center space-x-1 transition-all"
+                            title="Regenerate Image"
+                          >
+                            <RotateCcw className="w-3 h-3 text-amber-400" />
+                            <span className="text-[10px] font-medium">Regenerate</span>
+                          </button>
+                          <button
+                            onClick={() => handleDownloadImage(msg.imageUrl)}
+                            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
+                            title="Download Image"
+                          >
+                            <Download className="w-3.5 h-3.5 text-indigo-400" />
+                          </button>
+                          <button
+                            onClick={() => handleCopy(msg.imageUrl, index)}
+                            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
+                            title="Copy URL"
+                          >
+                            {copiedIndex === index ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => deleteMessage(msg.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
+                            title="Delete Message"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : msg.isDeepResearch ? (
+                    /* Deep Research Report Card */
+                    <div className="p-5 rounded-2xl bg-slate-950/90 border border-purple-500/30 text-slate-200 shadow-2xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center space-x-2.5">
+                          <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                            <Compass className="w-4 h-4" />
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-purple-950/80 text-purple-300 border border-purple-500/30">
-                              {msg.totalQueriesExecuted || 4} Multi-Pass Searches
-                            </span>
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-100">Deep Research Synthesis Report</h3>
+                            <p className="text-[11px] text-purple-300/80 font-medium truncate max-w-md">
+                              Topic: {msg.topic}
+                            </p>
                           </div>
                         </div>
+                        <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-purple-950/80 text-purple-300 border border-purple-500/30">
+                          {msg.totalQueriesExecuted || 4} Multi-Pass Searches
+                        </span>
+                      </div>
 
-                        {/* Executive Summary */}
-                        {msg.executiveSummary && (
-                          <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
-                              <Award className="w-3.5 h-3.5" />
-                              Executive Summary
-                            </h4>
-                            <div className="text-xs text-slate-200 leading-relaxed">
-                              {renderFormattedContentWithCitations(msg.executiveSummary, msg.citations, msg.sources)}
+                      {msg.executiveSummary && (
+                        <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+                            <Award className="w-3.5 h-3.5" />
+                            Executive Summary
+                          </h4>
+                          <div className="text-xs text-slate-200 leading-relaxed">
+                            {renderFormattedContentWithCitations(msg.executiveSummary, msg.citations, msg.sources)}
+                          </div>
+                        </div>
+                      )}
+
+                      {msg.keyFindings && msg.keyFindings.length > 0 && (
+                        <div className="space-y-2 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Key Empirical Findings
+                          </h4>
+                          <ul className="space-y-1.5 text-xs text-slate-300">
+                            {msg.keyFindings.map((finding, fIdx) => (
+                              <li key={fIdx} className="flex items-start gap-2">
+                                <span className="text-purple-400 font-bold">•</span>
+                                <span className="flex-1">
+                                  {renderFormattedContentWithCitations(finding, msg.citations, msg.sources)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {msg.detailedAnalysis && (
+                        <div className="space-y-2 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            Detailed Technical Synthesis
+                          </h4>
+                          <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                            {renderFormattedContentWithCitations(msg.detailedAnalysis, msg.citations, msg.sources)}
+                          </div>
+                        </div>
+                      )}
+
+                      {msg.conclusion && (
+                        <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Strategic Conclusion & Outlook
+                          </h4>
+                          <div className="text-xs text-slate-300 leading-relaxed">
+                            {renderFormattedContentWithCitations(msg.conclusion, msg.citations, msg.sources)}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Authoritative Sources Panel */}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="pt-3 border-t border-slate-800 space-y-2">
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                            <div className="flex items-center space-x-1.5 text-purple-400">
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>Verified Research Sources ({msg.sources.length})</span>
                             </div>
+                            <span className="text-[10px] text-slate-500 font-mono">
+                              Provider: {msg.searchProvider || 'Tavily'}
+                            </span>
                           </div>
-                        )}
 
-                        {/* Key Findings */}
-                        {msg.keyFindings && msg.keyFindings.length > 0 && (
-                          <div className="space-y-2 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Key Empirical Findings
-                            </h4>
-                            <ul className="space-y-1.5 text-xs text-slate-300">
-                              {msg.keyFindings.map((finding, fIdx) => (
-                                <li key={fIdx} className="flex items-start gap-2">
-                                  <span className="text-purple-400 font-bold">•</span>
-                                  <span className="flex-1">
-                                    {renderFormattedContentWithCitations(finding, msg.citations, msg.sources)}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {msg.sources.map((src, sIdx) => {
+                              const isValidUrl =
+                                src.url && (src.url.startsWith('https://') || src.url.startsWith('http://'));
+                              return (
+                                <a
+                                  key={src.id || sIdx}
+                                  href={isValidUrl ? src.url : '#'}
+                                  target={isValidUrl ? '_blank' : '_self'}
+                                  rel="noopener noreferrer"
+                                  className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-purple-500/50 hover:bg-slate-900 text-left flex flex-col justify-between transition-all group shadow-sm"
+                                >
+                                  <div className="space-y-1">
+                                    <div className="flex items-center justify-between text-[10px]">
+                                      <span className="px-1.5 py-0.2 rounded font-bold text-purple-300 bg-purple-500/20 border border-purple-500/30">
+                                        [{src.id || `S${sIdx + 1}`}] {src.sourceName || 'Source'}
+                                      </span>
+                                      {src.relevanceScore && (
+                                        <span className="text-[10px] text-emerald-400 font-mono">
+                                          {(src.relevanceScore * 100).toFixed(0)}% Authority
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs font-medium text-slate-200 group-hover:text-purple-300 line-clamp-1">
+                                      {src.title}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                                      {src.snippet}
+                                    </p>
+                                  </div>
+                                  <div className="mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 group-hover:text-purple-400">
+                                    <span className="truncate max-w-[180px]">{src.url}</span>
+                                    <ExternalLink className="w-3 h-3 shrink-0 ml-1" />
+                                  </div>
+                                </a>
+                              );
+                            })}
                           </div>
-                        )}
+                        </div>
+                      )}
 
-                        {/* Detailed Analysis */}
-                        {msg.detailedAnalysis && (
-                          <div className="space-y-2 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
-                              <BarChart3 className="w-3.5 h-3.5" />
-                              Detailed Technical Synthesis
-                            </h4>
-                            <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
-                              {renderFormattedContentWithCitations(msg.detailedAnalysis, msg.citations, msg.sources)}
-                            </div>
-                          </div>
-                        )}
+                      {/* Footer Actions */}
+                      <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                        <span className="font-mono text-slate-500">
+                          ~{msg.tokens} tokens • Multi-Source Grounded
+                        </span>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleSend(null, msg.topic)}
+                            className="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 flex items-center space-x-1 transition-all"
+                            title="Regenerate Research"
+                          >
+                            <RotateCcw className="w-3 h-3 text-purple-400" />
+                            <span className="text-[10px] font-medium">Re-Run</span>
+                          </button>
+                          <button
+                            onClick={() => handleCopy(msg.detailedAnalysis || msg.executiveSummary, index)}
+                            className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
+                            title="Copy Report"
+                          >
+                            {copiedIndex === index ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => deleteMessage(msg.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
+                            title="Delete Message"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Standard Text / Search Bubble */
+                    <div
+                      className={`relative p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                        isUser
+                          ? 'bg-indigo-600/30 border border-indigo-500/40 text-slate-100'
+                          : 'bg-slate-950/80 border border-slate-800/80 text-slate-200 shadow-sm'
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <p>
+                          {msg.isSearch
+                            ? renderFormattedContentWithCitations(msg.content, msg.citations, msg.sources)
+                            : msg.content}
+                        </p>
 
-                        {/* Contradictions / Discrepancies if present */}
-                        {msg.contradictions && !msg.contradictions.isBlank && (
-                          <div className="space-y-1.5 p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-amber-200">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                              <AlertTriangle className="w-3.5 h-3.5" />
-                              Contradictions & Opposing Evidence
-                            </h4>
-                            <div className="text-xs leading-relaxed">
-                              {renderFormattedContentWithCitations(msg.contradictions, msg.citations, msg.sources)}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Limitations & Conclusion */}
-                        {msg.conclusion && (
-                          <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                              <ShieldCheck className="w-3.5 h-3.5" />
-                              Strategic Conclusion & Outlook
-                            </h4>
-                            <div className="text-xs text-slate-300 leading-relaxed">
-                              {renderFormattedContentWithCitations(msg.conclusion, msg.citations, msg.sources)}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Authoritative Sources Panel */}
-                        {msg.sources && msg.sources.length > 0 && (
-                          <div className="pt-3 border-t border-slate-800 space-y-2">
+                        {/* Sources Card Section */}
+                        {msg.isSearch && msg.sources && msg.sources.length > 0 && (
+                          <div className="pt-3 mt-3 border-t border-slate-800/80 space-y-2">
                             <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-                              <div className="flex items-center space-x-1.5 text-purple-400">
+                              <div className="flex items-center space-x-1.5 text-sky-400">
                                 <BookOpen className="w-3.5 h-3.5" />
-                                <span>Verified Research Sources ({msg.sources.length})</span>
+                                <span>Sources ({msg.sources.length})</span>
                               </div>
                               <span className="text-[10px] text-slate-500 font-mono">
-                                Provider: {msg.searchProvider || 'Tavily'}
+                                {msg.searchProvider || 'Tavily Search'}
                               </span>
                             </div>
 
@@ -1456,27 +1364,28 @@ export const AIStudioPage = () => {
                                     href={isValidUrl ? src.url : '#'}
                                     target={isValidUrl ? '_blank' : '_self'}
                                     rel="noopener noreferrer"
-                                    className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-purple-500/50 hover:bg-slate-900 text-left flex flex-col justify-between transition-all group shadow-sm"
+                                    className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-sky-500/50 hover:bg-slate-900 text-left flex flex-col justify-between transition-all group shadow-sm"
                                   >
                                     <div className="space-y-1">
                                       <div className="flex items-center justify-between text-[10px]">
-                                        <span className="px-1.5 py-0.2 rounded font-bold text-purple-300 bg-purple-500/20 border border-purple-500/30">
-                                          [{src.id || `S${sIdx + 1}`}] {src.sourceName || 'Source'}
+                                        <span className="px-1.5 py-0.2 rounded font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30">
+                                          [{src.id || `S${sIdx + 1}`}] {src.sourceName || 'Web Source'}
                                         </span>
-                                        {src.relevanceScore && (
-                                          <span className="text-[10px] text-emerald-400 font-mono">
-                                            {(src.relevanceScore * 100).toFixed(0)}% Authority
+                                        {src.publishedDate && (
+                                          <span className="text-slate-500 flex items-center gap-0.5">
+                                            <Calendar className="w-2.5 h-2.5" />
+                                            {src.publishedDate}
                                           </span>
                                         )}
                                       </div>
-                                      <p className="text-xs font-medium text-slate-200 group-hover:text-purple-300 line-clamp-1">
+                                      <p className="text-xs font-medium text-slate-200 group-hover:text-sky-300 line-clamp-1">
                                         {src.title}
                                       </p>
                                       <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
                                         {src.snippet}
                                       </p>
                                     </div>
-                                    <div className="mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 group-hover:text-purple-400">
+                                    <div className="mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 group-hover:text-sky-400">
                                       <span className="truncate max-w-[180px]">{src.url}</span>
                                       <ExternalLink className="w-3 h-3 shrink-0 ml-1" />
                                     </div>
@@ -1486,550 +1395,525 @@ export const AIStudioPage = () => {
                             </div>
                           </div>
                         )}
+                      </div>
 
-                        {/* Report Footer / Actions */}
-                        <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-                          <span className="font-mono text-slate-500">
-                            ~{msg.tokens} tokens • Multi-Source Synthesized
+                      {!isUser && (
+                        <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="font-mono text-slate-400">
+                            ~{msg.tokens} tokens {msg.isSearch ? '• Web Augmented' : ''}
                           </span>
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => handleSend(null, msg.topic)}
-                              className="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 flex items-center space-x-1 transition-all"
-                              title="Regenerate Deep Research"
-                            >
-                              <RotateCcw className="w-3 h-3 text-purple-400" />
-                              <span className="text-[10px] font-medium">Re-Run Research</span>
-                            </button>
-                            <button
-                              onClick={() => handleCopy(msg.detailedAnalysis || msg.executiveSummary, index)}
-                              className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
-                              title="Copy Report"
-                            >
-                              {copiedIndex === index ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => deleteMessage(msg.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
-                              title="Delete Message"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Standard Text / Search Bubble */
-                      <div
-                        className={`relative p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                          isUser
-                            ? 'bg-indigo-600/30 border border-indigo-500/40 text-slate-100'
-                            : 'bg-slate-950/80 border border-slate-800/80 text-slate-200 shadow-sm'
-                        }`}
-                      >
-                        {/* Formatted Content with Interactive Citations */}
-                        <div className="space-y-3">
-                          <p>
-                            {msg.isSearch
-                              ? renderFormattedContentWithCitations(msg.content, msg.citations, msg.sources)
-                              : msg.content}
-                          </p>
-
-                          {/* Sources Card Section */}
-                          {msg.isSearch && msg.sources && msg.sources.length > 0 && (
-                            <div className="pt-3 mt-3 border-t border-slate-800/80 space-y-2">
-                              <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
-                                <div className="flex items-center space-x-1.5 text-sky-400">
-                                  <BookOpen className="w-3.5 h-3.5" />
-                                  <span>Sources ({msg.sources.length})</span>
-                                </div>
-                                <span className="text-[10px] text-slate-500 font-mono">
-                                  {msg.searchProvider || 'Tavily Search'}
-                                </span>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {msg.sources.map((src, sIdx) => {
-                                  const isValidUrl =
-                                    src.url && (src.url.startsWith('https://') || src.url.startsWith('http://'));
-                                  return (
-                                    <a
-                                      key={src.id || sIdx}
-                                      href={isValidUrl ? src.url : '#'}
-                                      target={isValidUrl ? '_blank' : '_self'}
-                                      rel="noopener noreferrer"
-                                      className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-sky-500/50 hover:bg-slate-900 text-left flex flex-col justify-between transition-all group shadow-sm"
-                                    >
-                                      <div className="space-y-1">
-                                        <div className="flex items-center justify-between text-[10px]">
-                                          <span className="px-1.5 py-0.2 rounded font-bold text-sky-300 bg-sky-500/20 border border-sky-500/30">
-                                            [{src.id || `S${sIdx + 1}`}] {src.sourceName || 'Web Source'}
-                                          </span>
-                                          {src.publishedDate && (
-                                            <span className="text-slate-500 flex items-center gap-0.5">
-                                              <Calendar className="w-2.5 h-2.5" />
-                                              {src.publishedDate}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <p className="text-xs font-medium text-slate-200 group-hover:text-sky-300 line-clamp-1">
-                                          {src.title}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
-                                          {src.snippet}
-                                        </p>
-                                      </div>
-                                      <div className="mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 group-hover:text-sky-400">
-                                        <span className="truncate max-w-[180px]">{src.url}</span>
-                                        <ExternalLink className="w-3 h-3 shrink-0 ml-1" />
-                                      </div>
-                                    </a>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {!isUser && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400">
-                            <span className="font-mono text-slate-400">
-                              ~{msg.tokens} tokens {msg.isSearch ? '• Web Augmented' : ''}
-                            </span>
-                            <button
-                              onClick={() => handleCopy(msg.content, index)}
-                              className="flex items-center space-x-1 hover:text-indigo-300 transition-colors p-1 rounded"
-                              title="Copy text"
-                            >
-                              {copiedIndex === index ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                              <span>{copiedIndex === index ? 'Copied' : 'Copy'}</span>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Loading Indicator */}
-            {loading && (
-              <div className="flex items-start gap-3.5">
-                <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-md ${
-                    activeMode === 'image'
-                      ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
-                      : activeMode === 'deep-research'
-                      ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
-                      : activeMode === 'web-search'
-                      ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
-                      : 'bg-slate-800 text-indigo-400 border border-slate-700'
-                  }`}
-                >
-                  {activeMode === 'image' ? (
-                    <Wand2 className="w-4 h-4 animate-spin" />
-                  ) : activeMode === 'deep-research' ? (
-                    <Compass className="w-4 h-4 animate-spin" />
-                  ) : activeMode === 'web-search' ? (
-                    <Globe className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Bot className="w-4 h-4 animate-pulse" />
-                  )}
-                </div>
-                <div className="space-y-2 max-w-[85%]">
-                  {activeMode === 'image' ? (
-                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-amber-500/30 text-amber-300 text-xs flex items-center space-x-3 shadow-lg">
-                      <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-                      <div>
-                        <p className="font-semibold text-amber-200">🎨 Creating your image...</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Synthesizing in {imageStylePreset} style ({imageAspectRatio})...
-                        </p>
-                      </div>
-                    </div>
-                  ) : activeMode === 'deep-research' ? (
-                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-purple-500/30 text-purple-300 text-xs space-y-2 shadow-lg animate-in fade-in">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />
-                        <div>
-                          <p className="font-semibold text-purple-200">
-                            {researchStage <= 1
-                              ? '🔭 Planning multi-angle research queries...'
-                              : researchStage === 2
-                              ? '🌐 Querying multiple live search indexes...'
-                              : researchStage === 3
-                              ? '🔎 Evaluating source authority & evidence...'
-                              : researchStage === 4
-                              ? '🔁 Performing in-depth follow-up inquiries...'
-                              : '🧠 Synthesizing structured research report with citations...'}
-                          </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Cross-verifying empirical documentation and grounding technical assertions...
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : activeMode === 'web-search' ? (
-                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-sky-500/30 text-sky-300 text-xs space-y-2 shadow-lg animate-in fade-in">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping" />
-                        <div>
-                          <p className="font-semibold text-sky-200">
-                            {searchStage <= 1
-                              ? '🌐 Searching the web...'
-                              : searchStage === 2
-                              ? '🔎 Reviewing & verifying sources...'
-                              : '🧠 Synthesizing answer with citations...'}
-                          </p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">
-                            Retrieving live internet knowledge and grounding factual claims...
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : isProcessingMultimodal ? (
-                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-indigo-500/30 text-indigo-300 text-xs flex items-center space-x-3 shadow-lg animate-in fade-in">
-                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
-                      <div>
-                        <p className="font-semibold text-indigo-200">🔍 Analyzing your files...</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
-                          Parsing multimodal visual & document context via {model}...
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {isThinkActive && (
-                        <div className="px-3.5 py-2 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 text-xs flex items-center space-x-2 animate-pulse">
-                          <Brain className="w-4 h-4 text-indigo-400 animate-spin" />
-                          <span>Reasoning & planning contextual synthesis...</span>
+                          <button
+                            onClick={() => handleCopy(msg.content, index)}
+                            className="flex items-center space-x-1 hover:text-indigo-300 transition-colors p-1 rounded"
+                            title="Copy text"
+                          >
+                            {copiedIndex === index ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                            <span>{copiedIndex === index ? 'Copied' : 'Copy'}</span>
+                          </button>
                         </div>
                       )}
-                      <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 text-slate-400 text-xs flex items-center space-x-2">
-                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
-                        <span>
-                          Synthesizing response via {model} {activeMode ? `[${activeMode}]` : ''}...
-                        </span>
-                      </div>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
-            )}
+            );
+          })}
 
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Library Modal */}
-          {isLibraryOpen && (
-            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-30 flex items-center justify-center p-6 animate-in fade-in">
-              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                  <div className="flex items-center space-x-2">
-                    <FolderOpen className="w-4 h-4 text-indigo-400" />
-                    <h3 className="text-sm font-bold text-slate-200">Workspace Library</h3>
+          {/* Loading States */}
+          {loading && (
+            <div className="flex items-start gap-3.5">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-md ${
+                  activeMode === 'image'
+                    ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                    : activeMode === 'deep-research'
+                    ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
+                    : activeMode === 'web-search'
+                    ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
+                    : 'bg-slate-800 text-indigo-400 border border-slate-700'
+                }`}
+              >
+                {activeMode === 'image' ? (
+                  <Wand2 className="w-4 h-4 animate-spin" />
+                ) : activeMode === 'deep-research' ? (
+                  <Compass className="w-4 h-4 animate-spin" />
+                ) : activeMode === 'web-search' ? (
+                  <Globe className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Bot className="w-4 h-4 animate-pulse" />
+                )}
+              </div>
+              <div className="space-y-2 max-w-[85%]">
+                {activeMode === 'image' ? (
+                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-amber-500/30 text-amber-300 text-xs flex items-center space-x-3 shadow-lg">
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                    <div>
+                      <p className="font-semibold text-amber-200">🎨 Creating your image...</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Synthesizing in {imageStylePreset} style ({imageAspectRatio})...
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setIsLibraryOpen(false)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {libraryFiles.map((file, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleAttachFromLibrary(file)}
-                      className="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-950 text-left flex items-center justify-between transition-all"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <FileCode className="w-4 h-4 text-indigo-400" />
-                        <div>
-                          <p className="text-xs font-medium text-slate-200">{file.name}</p>
-                          <p className="text-[10px] text-slate-500">{file.size}</p>
-                        </div>
+                ) : activeMode === 'deep-research' ? (
+                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-purple-500/30 text-purple-300 text-xs space-y-2 shadow-lg animate-in fade-in">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />
+                      <div>
+                        <p className="font-semibold text-purple-200">
+                          {researchStage <= 1
+                            ? '🔭 Planning multi-angle research queries...'
+                            : researchStage === 2
+                            ? '🌐 Querying multiple live search indexes...'
+                            : researchStage === 3
+                            ? '🔎 Evaluating source authority & evidence...'
+                            : researchStage === 4
+                            ? '🔁 Performing in-depth follow-up inquiries...'
+                            : '🧠 Synthesizing structured research report with citations...'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Cross-verifying empirical documentation and grounding technical assertions...
+                        </p>
                       </div>
-                      <span className="text-[10px] text-indigo-400 font-semibold px-2 py-1 bg-indigo-500/10 rounded-md">
-                        Attach
+                    </div>
+                  </div>
+                ) : activeMode === 'web-search' ? (
+                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-sky-500/30 text-sky-300 text-xs space-y-2 shadow-lg animate-in fade-in">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping" />
+                      <div>
+                        <p className="font-semibold text-sky-200">
+                          {searchStage <= 1
+                            ? '🌐 Searching the web...'
+                            : searchStage === 2
+                            ? '🔎 Reviewing & verifying sources...'
+                            : '🧠 Synthesizing answer with citations...'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          Retrieving live internet knowledge and grounding factual claims...
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : isProcessingMultimodal ? (
+                  <div className="p-4 rounded-2xl bg-slate-950/90 border border-indigo-500/30 text-indigo-300 text-xs flex items-center space-x-3 shadow-lg animate-in fade-in">
+                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
+                    <div>
+                      <p className="font-semibold text-indigo-200">🔍 Analyzing your files...</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Parsing multimodal visual & document context via {model}...
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {isThinkActive && (
+                      <div className="px-3.5 py-2 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 text-xs flex items-center space-x-2 animate-pulse">
+                        <Brain className="w-4 h-4 text-indigo-400 animate-spin" />
+                        <span>Reasoning & planning contextual synthesis...</span>
+                      </div>
+                    )}
+                    <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800/80 text-slate-400 text-xs flex items-center space-x-2">
+                      <div className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+                      <span>
+                        Synthesizing response via {model} {activeMode ? `[${activeMode}]` : ''}...
                       </span>
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
 
-          {/* Bottom Action Menu Popover & Prompt Container */}
-          <div className="p-4 bg-slate-950/95 border-t border-slate-800/80 relative">
-            
-            {/* Popover Action Menu */}
-            {isActionMenuOpen && (
-              <div
-                ref={actionMenuRef}
-                className="absolute bottom-20 left-4 z-20 w-80 bg-[#18181b]/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in slide-in-from-bottom-3"
-              >
-                <div className="px-2.5 py-1.5 mb-1 bg-slate-900/80 rounded-xl border border-slate-800/80 flex items-center gap-2">
-                  <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <input
-                    type="text"
-                    value={actionSearchQuery}
-                    onChange={(e) => setActionSearchQuery(e.target.value)}
-                    placeholder="Type to search plugins, files, folders & skills"
-                    className="w-full bg-transparent text-[11px] text-slate-200 placeholder:text-slate-500 focus:outline-none"
-                  />
-                </div>
+          <div ref={messagesEndRef} />
+        </div>
 
-                <div className="max-h-72 overflow-y-auto space-y-1">
-                  {filteredActionItems.map((item) => {
-                    const IconComp = item.icon;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={item.action}
-                        className="w-full p-2 rounded-xl text-left flex items-start gap-3 hover:bg-slate-800/80 transition-colors group"
-                      >
-                        <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-300 group-hover:text-white group-hover:border-slate-700">
-                          <IconComp className="w-4 h-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-slate-200 group-hover:text-white truncate">
-                            {item.title}
-                          </p>
-                          <p className="text-[10px] text-slate-400 line-clamp-1">
-                            {item.subtitle}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
+        {/* Library Modal */}
+        {isLibraryOpen && (
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md z-30 flex items-center justify-center p-6 animate-in fade-in">
+            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center space-x-2">
+                  <FolderOpen className="w-4 h-4 text-indigo-400" />
+                  <h3 className="text-sm font-bold text-slate-200">Workspace Library</h3>
                 </div>
+                <button
+                  onClick={() => setIsLibraryOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-            )}
-
-            {/* Language Selector Popover (Phase 5E Voice) */}
-            {isLangMenuOpen && (
-              <div
-                ref={langMenuRef}
-                className="absolute bottom-20 right-14 z-20 w-48 bg-[#18181b]/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in"
-              >
-                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
-                  Voice Input Language
-                </div>
-                {SUPPORTED_LANGUAGES.map((lang) => (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {libraryFiles.map((file, idx) => (
                   <button
-                    key={lang.code}
-                    onClick={() => handleSelectLanguage(lang.code)}
-                    className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium flex items-center justify-between transition-colors ${
-                      speechLanguage === lang.code
-                        ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
-                        : 'text-slate-300 hover:bg-slate-800'
-                    }`}
+                    key={idx}
+                    onClick={() => handleAttachFromLibrary(file)}
+                    className="w-full p-3 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-indigo-500/50 hover:bg-slate-950 text-left flex items-center justify-between transition-all"
                   >
-                    <span>{lang.name}</span>
-                    {speechLanguage === lang.code && <Check className="w-3 h-3 text-indigo-400" />}
+                    <div className="flex items-center space-x-3">
+                      <FileCode className="w-4 h-4 text-indigo-400" />
+                      <div>
+                        <p className="text-xs font-medium text-slate-200">{file.name}</p>
+                        <p className="text-[10px] text-slate-500">{file.size}</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-indigo-400 font-semibold px-2 py-1 bg-indigo-500/10 rounded-md">
+                      Attach
+                    </span>
                   </button>
                 ))}
               </div>
-            )}
+            </div>
+          </div>
+        )}
 
-            {/* Active Mode Indicator Bar */}
-            {activeModeDetails && (
-              <div className="mb-3 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between animate-in fade-in">
-                <div className="flex items-center space-x-2">
-                  <activeModeDetails.icon className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="text-xs font-semibold text-slate-200">{activeModeDetails.title}:</span>
-                  <span className="text-xs text-slate-400">{activeModeDetails.desc}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveMode(null)}
-                  className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-                  title="Cancel Mode"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Attached Files Preview Bar */}
-            {attachments.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {attachments.map((att) => (
-                  <div
-                    key={att.id}
-                    className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs flex items-center gap-2 text-slate-200 shadow-md group animate-in fade-in"
-                  >
-                    {att.isImage && att.previewUrl ? (
-                      <img
-                        src={att.previewUrl}
-                        alt={att.name}
-                        className="w-7 h-7 rounded-lg object-cover border border-slate-700"
-                      />
-                    ) : (
-                      <FileText className="w-4 h-4 text-indigo-400" />
-                    )}
-                    <div className="max-w-[130px]">
-                      <p className="text-[11px] font-medium truncate">{att.name}</p>
-                      <p className="text-[9px] text-slate-500">{att.size}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(att.id)}
-                      className="p-1 text-slate-400 hover:text-rose-400 rounded-md hover:bg-slate-800 transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Interactive Prompt Bar */}
-            <form
-              onSubmit={(e) => handleSend(e, null)}
-              className={`flex items-center gap-2 p-1.5 rounded-2xl bg-[#111318] border transition-all shadow-inner ${
-                isListening
-                  ? 'border-rose-500/60 shadow-rose-500/10 ring-2 ring-rose-500/20'
-                  : 'border-slate-800/90'
-              }`}
+        {/* Bottom Popovers & Prompt Bar Container */}
+        <div className="p-4 bg-slate-950/95 border-t border-slate-800/80 relative">
+          
+          {/* Action Menu Popover */}
+          {isActionMenuOpen && (
+            <div
+              ref={actionMenuRef}
+              className="absolute bottom-20 left-4 z-20 w-80 bg-[#18181b]/98 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in slide-in-from-bottom-3"
             >
-              <button
-                type="button"
-                onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800/80 transition-all shrink-0 ${
-                  isActionMenuOpen ? 'bg-slate-800 text-white rotate-45' : ''
-                }`}
-                title="Add photos, files & actions"
-              >
-                <Plus className="w-5 h-5 transition-transform duration-200" />
-              </button>
-
-              <div className="flex-1 flex items-center relative min-w-0">
+              <div className="px-2.5 py-1.5 mb-1 bg-slate-900/80 rounded-xl border border-slate-800/80 flex items-center gap-2">
+                <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                 <input
                   type="text"
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={
-                    isListening
-                      ? `Listening in ${currentLangObj.name}... Speak now.`
-                      : activeMode === 'image'
-                      ? 'Describe the image you want to create...'
-                      : activeMode === 'deep-research'
-                      ? 'Enter complex topic for multi-query deep research & report synthesis...'
-                      : activeMode === 'web-search'
-                      ? 'Search the web and ask anything...'
-                      : attachments.length > 0
-                      ? 'Ask questions about the attached file(s)...'
-                      : 'Ask anything or speak'
-                  }
-                  disabled={loading || isQuotaExceeded}
-                  className="w-full px-3 py-2 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-50"
+                  value={actionSearchQuery}
+                  onChange={(e) => setActionSearchQuery(e.target.value)}
+                  placeholder="Type to search plugins, files & actions"
+                  className="w-full bg-transparent text-[11px] text-slate-200 placeholder:text-slate-500 focus:outline-none"
                 />
-
-                {isListening && (
-                  <span className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/40 text-[10px] text-rose-300 animate-pulse shrink-0 mr-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                    <span>Listening</span>
-                  </span>
-                )}
               </div>
 
-              {/* Think Button */}
-              <button
-                type="button"
-                onClick={() => setIsThinkActive(!isThinkActive)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all shrink-0 ${
-                  isThinkActive
-                    ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/50 shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-                title="Toggle Step-by-Step Reasoning Mode"
-              >
-                <Brain className="w-4 h-4" />
-                <span>Think</span>
-              </button>
+              <div className="max-h-72 overflow-y-auto space-y-1">
+                {filteredActionItems.map((item) => {
+                  const IconComp = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={item.action}
+                      className="w-full p-2 rounded-xl text-left flex items-start gap-3 hover:bg-slate-800/80 transition-colors group"
+                    >
+                      <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-slate-300 group-hover:text-white group-hover:border-slate-700">
+                        <IconComp className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-slate-200 group-hover:text-white truncate">
+                          {item.title}
+                        </p>
+                        <p className="text-[10px] text-slate-400 line-clamp-1">
+                          {item.subtitle}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
-              {/* Language Selector Button */}
-              <button
-                type="button"
-                onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-                className="p-1.5 px-2 rounded-xl text-[10px] font-bold text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors shrink-0 flex items-center gap-1 border border-slate-800/60"
-                title={`Speech Language: ${currentLangObj.name} (Click to change)`}
-              >
-                <Languages className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{speechLanguage.split('-')[0].toUpperCase()}</span>
-              </button>
+          {/* Model Selector Popover (Exact Matching Aesthetic from Screenshot) */}
+          {isModelMenuOpen && (
+            <div
+              ref={modelMenuRef}
+              className="absolute bottom-20 left-16 z-30 w-80 bg-[#18181b]/98 backdrop-blur-2xl border border-slate-700/90 rounded-2xl shadow-2xl p-2.5 space-y-1 animate-in fade-in slide-in-from-bottom-2 text-left"
+            >
+              <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800/80 mb-1 flex items-center justify-between">
+                <span>Model</span>
+                <span className="text-[10px] font-mono text-slate-500">Nexus Engine</span>
+              </div>
 
-              {/* Real Voice / Microphone Button (Phase 5E) */}
+              <div className="max-h-80 overflow-y-auto space-y-1">
+                {AVAILABLE_MODELS.map((item) => {
+                  const isSelected = model === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setModel(item.id);
+                        setIsModelMenuOpen(false);
+                      }}
+                      className={`w-full p-2.5 rounded-xl text-left flex items-center justify-between transition-all group ${
+                        isSelected
+                          ? 'bg-slate-800/90 text-white border border-slate-700/80 shadow-md'
+                          : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'
+                      }`}
+                    >
+                      <div className="space-y-0.5 flex-1 min-w-0 mr-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold truncate">{item.name}</span>
+                          <span className="text-[10px] text-slate-500 font-normal">{item.category}</span>
+                        </div>
+                        <p className="text-[10px] text-slate-400 line-clamp-1">{item.description}</p>
+                      </div>
+
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        {item.speed && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-900/80 text-slate-400 border border-slate-800">
+                            {item.speed}
+                          </span>
+                        )}
+                        {isSelected ? (
+                          <Check className="w-3.5 h-3.5 text-indigo-400 ml-1" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Language Selector Popover */}
+          {isLangMenuOpen && (
+            <div
+              ref={langMenuRef}
+              className="absolute bottom-20 right-16 z-20 w-48 bg-[#18181b]/98 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in"
+            >
+              <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                Voice Input Language
+              </div>
+              {SUPPORTED_LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => handleSelectLanguage(lang.code)}
+                  className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium flex items-center justify-between transition-colors ${
+                    speechLanguage === lang.code
+                      ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                      : 'text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  <span>{lang.name}</span>
+                  {speechLanguage === lang.code && <Check className="w-3 h-3 text-indigo-400" />}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Active Mode Indicator Bar */}
+          {activeModeDetails && (
+            <div className="mb-3 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between animate-in fade-in">
+              <div className="flex items-center space-x-2">
+                <activeModeDetails.icon className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="text-xs font-semibold text-slate-200">{activeModeDetails.title}:</span>
+                <span className="text-xs text-slate-400">{activeModeDetails.desc}</span>
+              </div>
               <button
                 type="button"
-                onClick={handleToggleVoice}
-                className={`p-2 rounded-xl transition-all shrink-0 ${
+                onClick={() => setActiveMode(null)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                title="Cancel Mode"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Attached Files Preview Bar */}
+          {attachments.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {attachments.map((att) => (
+                <div
+                  key={att.id}
+                  className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs flex items-center gap-2 text-slate-200 shadow-md group animate-in fade-in"
+                >
+                  {att.isImage && att.previewUrl ? (
+                    <img
+                      src={att.previewUrl}
+                      alt={att.name}
+                      className="w-7 h-7 rounded-lg object-cover border border-slate-700"
+                    />
+                  ) : (
+                    <FileText className="w-4 h-4 text-indigo-400" />
+                  )}
+                  <div className="max-w-[130px]">
+                    <p className="text-[11px] font-medium truncate">{att.name}</p>
+                    <p className="text-[9px] text-slate-500">{att.size}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(att.id)}
+                    className="p-1 text-slate-400 hover:text-rose-400 rounded-md hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Interactive Modern Prompt Bar */}
+          <form
+            onSubmit={(e) => handleSend(e, null)}
+            className={`flex items-center gap-2 p-1.5 rounded-2xl bg-[#111318] border transition-all shadow-inner ${
+              isListening
+                ? 'border-rose-500/60 shadow-rose-500/10 ring-2 ring-rose-500/20'
+                : 'border-slate-800/90'
+            }`}
+          >
+            {/* + Button (Action Menu) */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsActionMenuOpen(!isActionMenuOpen);
+                setIsModelMenuOpen(false);
+              }}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800/80 transition-all shrink-0 ${
+                isActionMenuOpen ? 'bg-slate-800 text-white rotate-45' : ''
+              }`}
+              title="Add photos, files & actions"
+            >
+              <Plus className="w-5 h-5 transition-transform duration-200" />
+            </button>
+
+            {/* Active Model Pill Selector (Directly Inside Prompt Bar) */}
+            <button
+              type="button"
+              onClick={() => {
+                setIsModelMenuOpen(!isModelMenuOpen);
+                setIsActionMenuOpen(false);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all shrink-0 border ${
+                isModelMenuOpen
+                  ? 'bg-slate-800 text-indigo-300 border-indigo-500/50 shadow-md'
+                  : 'bg-slate-900/90 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700'
+              }`}
+              title="Select Active AI Model"
+            >
+              <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="truncate max-w-[140px]">{selectedModelObj.name}</span>
+              {isModelMenuOpen ? (
+                <ChevronUp className="w-3 h-3 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              )}
+            </button>
+
+            {/* Prompt Input */}
+            <div className="flex-1 flex items-center relative min-w-0">
+              <input
+                type="text"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder={
                   isListening
-                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/40 animate-pulse'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                }`}
-                title={
-                  !isSpeechSupported
-                    ? 'Voice input not supported in this browser'
-                    : isListening
-                    ? 'Stop listening'
-                    : `Voice input (${currentLangObj.name})`
+                    ? `Listening in ${currentLangObj.name}... Speak now.`
+                    : activeMode === 'image'
+                    ? 'Describe the image you want to create...'
+                    : activeMode === 'deep-research'
+                    ? 'Enter complex topic for multi-query deep research & report synthesis...'
+                    : activeMode === 'web-search'
+                    ? 'Search the web and ask anything...'
+                    : attachments.length > 0
+                    ? 'Ask questions about the attached file(s)...'
+                    : 'Ask anything or speak'
                 }
-              >
-                {isListening ? (
-                  <MicOff className="w-4 h-4 text-white" />
-                ) : (
-                  <Mic className="w-4 h-4" />
-                )}
-              </button>
+                disabled={loading || isQuotaExceeded}
+                className="w-full px-3 py-2 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-50"
+              />
 
-              {/* Send Button */}
-              <button
-                type="submit"
-                disabled={(!prompt.trim() && attachments.length === 0) || loading || isQuotaExceeded}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
-                  activeMode === 'image'
-                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/20'
-                    : activeMode === 'deep-research'
-                    ? 'bg-purple-600 hover:bg-purple-500 shadow-purple-500/20'
-                    : activeMode === 'web-search'
-                    ? 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'
-                    : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'
-                }`}
-                title={
-                  activeMode === 'image'
-                    ? 'Generate Image'
-                    : activeMode === 'deep-research'
-                    ? 'Execute Deep Research'
-                    : activeMode === 'web-search'
-                    ? 'Search Web & Answer'
-                    : 'Send Prompt'
-                }
-              >
-                {activeMode === 'image' ? (
-                  <Wand2 className="w-4 h-4" />
-                ) : activeMode === 'deep-research' ? (
-                  <Compass className="w-4 h-4" />
-                ) : activeMode === 'web-search' ? (
-                  <Globe className="w-4 h-4" />
-                ) : (
-                  <AudioWaveform className="w-4 h-4" />
-                )}
-              </button>
-            </form>
-          </div>
+              {isListening && (
+                <span className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/40 text-[10px] text-rose-300 animate-pulse shrink-0 mr-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  <span>Listening</span>
+                </span>
+              )}
+            </div>
+
+            {/* Think Button */}
+            <button
+              type="button"
+              onClick={() => setIsThinkActive(!isThinkActive)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition-all shrink-0 ${
+                isThinkActive
+                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/50 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+              title="Toggle Step-by-Step Reasoning Mode"
+            >
+              <Brain className="w-4 h-4" />
+              <span>Think</span>
+            </button>
+
+            {/* Language Selector Button */}
+            <button
+              type="button"
+              onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+              className="p-1.5 px-2 rounded-xl text-[10px] font-bold text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors shrink-0 flex items-center gap-1 border border-slate-800/60"
+              title={`Speech Language: ${currentLangObj.name} (Click to change)`}
+            >
+              <Languages className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{speechLanguage.split('-')[0].toUpperCase()}</span>
+            </button>
+
+            {/* Real Voice Button */}
+            <button
+              type="button"
+              onClick={handleToggleVoice}
+              className={`p-2 rounded-xl transition-all shrink-0 ${
+                isListening
+                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/40 animate-pulse'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+              title={
+                !isSpeechSupported
+                  ? 'Voice input not supported in this browser'
+                  : isListening
+                  ? 'Stop listening'
+                  : `Voice input (${currentLangObj.name})`
+              }
+            >
+              {isListening ? (
+                <MicOff className="w-4 h-4 text-white" />
+              ) : (
+                <Mic className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* Send / Execute Button */}
+            <button
+              type="submit"
+              disabled={(!prompt.trim() && attachments.length === 0) || loading || isQuotaExceeded}
+              className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
+                activeMode === 'image'
+                  ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/20'
+                  : activeMode === 'deep-research'
+                  ? 'bg-purple-600 hover:bg-purple-500 shadow-purple-500/20'
+                  : activeMode === 'web-search'
+                  ? 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'
+                  : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'
+              }`}
+              title={
+                activeMode === 'image'
+                  ? 'Generate Image'
+                  : activeMode === 'deep-research'
+                  ? 'Execute Deep Research'
+                  : activeMode === 'web-search'
+                  ? 'Search Web & Answer'
+                  : 'Send Prompt'
+              }
+            >
+              {activeMode === 'image' ? (
+                <Wand2 className="w-4 h-4" />
+              ) : activeMode === 'deep-research' ? (
+                <Compass className="w-4 h-4" />
+              ) : activeMode === 'web-search' ? (
+                <Globe className="w-4 h-4" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </button>
+          </form>
         </div>
       </div>
     </div>
