@@ -6,6 +6,7 @@ import com.saasplatform.ai.dto.ChatMessageDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -26,7 +27,14 @@ public class GeminiAiProvider implements AiProvider {
     private String baseUrl;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
+
+    public GeminiAiProvider() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(8000);
+        factory.setReadTimeout(20000);
+        this.restClient = RestClient.builder().requestFactory(factory).build();
+    }
 
     @Override
     public String getProviderName() {
@@ -113,15 +121,12 @@ public class GeminiAiProvider implements AiProvider {
     }
 
     private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody) {
-        // List of candidate model & apiVersion pairs to try in sequence
-        List<String[]> candidates = new ArrayList<>();
-        candidates.add(new String[]{"v1beta", preferredModel});
-        candidates.add(new String[]{"v1", preferredModel});
-        candidates.add(new String[]{"v1beta", "gemini-2.0-flash"});
-        candidates.add(new String[]{"v1beta", "gemini-1.5-flash-latest"});
-        candidates.add(new String[]{"v1beta", "gemini-1.5-pro-latest"});
-        candidates.add(new String[]{"v1", "gemini-1.5-flash"});
-        candidates.add(new String[]{"v1beta", "gemini-2.5-flash"});
+        List<String[]> candidates = List.of(
+                new String[]{"v1beta", preferredModel},
+                new String[]{"v1beta", "gemini-2.0-flash"},
+                new String[]{"v1beta", "gemini-1.5-flash"},
+                new String[]{"v1", "gemini-1.5-flash"}
+        );
 
         RestClientResponseException lastException = null;
 
@@ -131,7 +136,7 @@ public class GeminiAiProvider implements AiProvider {
             String url = String.format("%s/%s/models/%s:generateContent?key=%s", baseUrl, apiVersion, modelName, apiKey.trim());
 
             try {
-                log.debug("Attempting Gemini call on {} / {}", apiVersion, modelName);
+                log.info("Executing Gemini call on {} / {}", apiVersion, modelName);
                 String responseJson = restClient.post()
                         .uri(url)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -144,14 +149,14 @@ public class GeminiAiProvider implements AiProvider {
             } catch (RestClientResponseException e) {
                 lastException = e;
                 if (e.getStatusCode().value() == 404) {
-                    log.warn("Gemini model {} on {} not found (404), trying next candidate...", modelName, apiVersion);
-                    continue; // Try next candidate model/version
+                    log.warn("Gemini model {} on {} returned 404, attempting fallback...", modelName, apiVersion);
+                    continue;
                 }
-                // If it's a 400 (bad key), 403 (forbidden), or other non-404 error, report directly
+                // If it's a 400 (bad key), 403 (forbidden), or 429 (Google rate limit), report directly
                 return handleGeminiApiError(e);
             } catch (Exception e) {
-                log.error("Network or unexpected error calling Gemini API: {}", e.getMessage(), e);
-                return "⚠️ **AI Generation Error:** Unable to reach Google Gemini API (" + e.getMessage() + "). Please check your network.";
+                log.error("Network error calling Gemini API: {}", e.getMessage(), e);
+                return "⚠️ **AI Generation Error:** Unable to reach Google Gemini API (" + e.getMessage() + "). Please check your network connection.";
             }
         }
 
@@ -192,13 +197,12 @@ public class GeminiAiProvider implements AiProvider {
 
     private String normalizeModel(String model) {
         if (model == null || model.isBlank()) {
-            return "gemini-1.5-flash";
+            return "gemini-2.0-flash";
         }
         if (model.contains("gemini-2.0-flash")) return "gemini-2.0-flash";
         if (model.contains("gemini-1.5-pro")) return "gemini-1.5-pro";
-        if (model.contains("gemini-2.5-flash")) return "gemini-2.5-flash";
         if (model.contains("gemini-1.5-flash")) return "gemini-1.5-flash";
-        return model;
+        return "gemini-2.0-flash";
     }
 
     private String extractTextFromGeminiResponse(String responseJson) {

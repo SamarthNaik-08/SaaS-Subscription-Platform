@@ -36,6 +36,13 @@ app:
       base-url: ${TAVILY_BASE_URL:https://api.tavily.com/search}
       max-results: ${AI_WEB_SEARCH_MAX_RESULTS:5}
       timeout-ms: ${AI_WEB_SEARCH_TIMEOUT_MS:10000}
+    deep-research:
+      enabled: ${AI_DEEP_RESEARCH_ENABLED:true}
+      max-queries: ${AI_RESEARCH_MAX_QUERIES:8}
+      max-results-per-query: ${AI_RESEARCH_MAX_RESULTS_PER_QUERY:5}
+      max-sources: ${AI_RESEARCH_MAX_SOURCES:30}
+      max-depth: ${AI_RESEARCH_MAX_DEPTH:2}
+      timeout-ms: ${AI_RESEARCH_TIMEOUT_MS:30000}
   payment:
     provider: ${PAYMENT_PROVIDER:SANDBOX}
     razorpay:

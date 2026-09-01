@@ -46,6 +46,19 @@ export const aiService = {
     return response.data;
   },
 
+  deepResearch: async (topic, options = {}) => {
+    const response = await api.post('/ai/research', {
+      topic,
+      depth: options.depth || 1,
+      maxQueries: options.maxQueries || 4,
+      model: options.model || 'gemini-2.0-flash',
+      systemInstruction: options.systemInstruction,
+      temperature: options.temperature,
+      parameters: options.parameters || {},
+    });
+    return response.data;
+  },
+
   getModels: async () => {
     const response = await api.get('/ai/models');
     return response.data;

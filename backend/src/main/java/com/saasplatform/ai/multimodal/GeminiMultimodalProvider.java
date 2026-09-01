@@ -109,9 +109,8 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
     private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody) {
         List<String[]> candidates = List.of(
                 new String[]{"v1beta", preferredModel},
-                new String[]{"v1", preferredModel},
                 new String[]{"v1beta", "gemini-2.0-flash"},
-                new String[]{"v1beta", "gemini-1.5-flash-latest"},
+                new String[]{"v1beta", "gemini-1.5-flash"},
                 new String[]{"v1", "gemini-1.5-flash"}
         );
 

@@ -37,6 +37,10 @@ import {
   Link as LinkIcon,
   Calendar,
   ShieldCheck,
+  FileSpreadsheet,
+  BarChart3,
+  Bookmark,
+  Award,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { aiService } from '../../services/aiService';
@@ -59,6 +63,7 @@ export const AIStudioPage = () => {
   ]);
   const [loading, setLoading] = useState(false);
   const [searchStage, setSearchStage] = useState(0); // 0: Idle, 1: Searching, 2: Reviewing, 3: Synthesizing
+  const [researchStage, setResearchStage] = useState(0); // 0..5 stages for Deep Research
   const [isProcessingMultimodal, setIsProcessingMultimodal] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [systemInstruction, setSystemInstruction] = useState('');
@@ -67,7 +72,7 @@ export const AIStudioPage = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
 
-  // Phase 5A + 5B + 5C Action Menu, Mode, Image & Multimodal State
+  // Action Menu, Mode, Image & Multimodal State
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [actionSearchQuery, setActionSearchQuery] = useState('');
   const [activeMode, setActiveMode] = useState(null); // 'image' | 'web-search' | 'deep-research' | 'developer' | null
@@ -76,7 +81,7 @@ export const AIStudioPage = () => {
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [expandedThoughts, setExpandedThoughts] = useState({});
 
-  // Image Generation Options (Phase 5B)
+  // Image Generation Options
   const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
   const [imageStylePreset, setImageStylePreset] = useState('Cinematic');
   const [lightboxImage, setLightboxImage] = useState(null);
@@ -221,7 +226,7 @@ export const AIStudioPage = () => {
       id: 'deep-research',
       icon: Compass,
       title: 'Deep research',
-      subtitle: 'Get a detailed report',
+      subtitle: 'Multi-query empirical synthesis and report',
       action: () => {
         setActiveMode('deep-research');
         setIsActionMenuOpen(false);
@@ -362,13 +367,19 @@ export const AIStudioPage = () => {
     if (activeMode === 'web-search') {
       setSearchStage(1);
       setTimeout(() => setSearchStage(2), 1200);
-      setTimeout(() => setSearchStage(3), 2200);
+      setTimeout(() => setSearchStage(3), 2400);
+    } else if (activeMode === 'deep-research') {
+      setResearchStage(1);
+      setTimeout(() => setResearchStage(2), 1200);
+      setTimeout(() => setResearchStage(3), 2600);
+      setTimeout(() => setResearchStage(4), 4000);
+      setTimeout(() => setResearchStage(5), 5500);
     }
 
     const startTime = performance.now();
 
     try {
-      // 1. Image Generation Workflow (Phase 5B)
+      // 1. Image Generation Workflow
       if (activeMode === 'image') {
         const res = await aiService.generateImage(targetPrompt, {
           aspectRatio: imageAspectRatio,
@@ -405,8 +416,64 @@ export const AIStudioPage = () => {
             }));
           }
         }
+      } else if (activeMode === 'deep-research') {
+        // 2. Real Deep Research Pipeline Workflow (Phase 5D)
+        let enrichedSystemInstruction = systemInstruction || '';
+        if (isThinkActive) {
+          enrichedSystemInstruction += ' Conduct rigorous multi-perspective reasoning and empirical cross-verification.';
+        }
+
+        const res = await aiService.deepResearch(targetPrompt, {
+          depth: 2,
+          maxQueries: 4,
+          model,
+          systemInstruction: enrichedSystemInstruction.trim() || undefined,
+          temperature,
+        });
+
+        const elapsedSec = ((performance.now() - startTime) / 1000).toFixed(2);
+
+        if (res.success && res.data) {
+          const assistantMsg = {
+            id: 'asst-' + messageId,
+            role: 'assistant',
+            isImage: false,
+            isSearch: false,
+            isDeepResearch: true,
+            topic: res.data.topic,
+            executiveSummary: res.data.executiveSummary,
+            keyFindings: res.data.keyFindings || [],
+            detailedAnalysis: res.data.detailedAnalysis,
+            contradictions: res.data.contradictions,
+            limitations: res.data.limitations,
+            conclusion: res.data.conclusion,
+            citations: res.data.citations || [],
+            sources: res.data.sources || [],
+            plan: res.data.plan,
+            model: res.data.model,
+            provider: res.data.provider,
+            searchProvider: res.data.searchProvider,
+            totalQueriesExecuted: res.data.totalQueriesExecuted,
+            mode: 'deep-research',
+            tokens: res.data.totalTokens,
+            latency: elapsedSec,
+            timestamp: new Date().toLocaleTimeString(),
+          };
+
+          setMessages((prev) => [...prev, assistantMsg]);
+
+          if (res.data.quotaUsage) {
+            setCurrentUsage((prev) => ({
+              ...prev,
+              metrics: {
+                ...prev?.metrics,
+                AI_REQUEST: res.data.quotaUsage,
+              },
+            }));
+          }
+        }
       } else if (activeMode === 'web-search') {
-        // 2. Real Web Search + Citations Workflow (Phase 5C)
+        // 3. Real Web Search Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Provide structured multi-perspective analysis and reasoning.';
@@ -470,7 +537,7 @@ export const AIStudioPage = () => {
           }
         }
       } else if (hasFiles) {
-        // 3. Multimodal File & Image Understanding Workflow (Phase 5C)
+        // 4. Multimodal File & Image Understanding Workflow
         const formData = new FormData();
         formData.append('prompt', targetPrompt || 'Please analyze and summarize the attached files in detail.');
         formData.append('model', model);
@@ -528,16 +595,13 @@ export const AIStudioPage = () => {
           }
         }
       } else {
-        // 4. Standard Text / Chat Workflow
+        // 5. Standard Text / Chat Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Provide deep, structured step-by-step reasoning.';
         }
-        if (activeMode === 'deep-research') {
-          enrichedSystemInstruction += ' Provide an in-depth research report with executive summary, data breakdown, and strategic insights.';
-        }
 
-        const res = await aiService.generateText(targetPrompt || 'Analyze attached context', model, {
+        const res = await aiService.generateText(targetPrompt || 'Analyze context', model, {
           temperature,
           systemInstruction: enrichedSystemInstruction.trim() || undefined,
         });
@@ -602,6 +666,7 @@ export const AIStudioPage = () => {
     } finally {
       setLoading(false);
       setSearchStage(0);
+      setResearchStage(0);
       setIsProcessingMultimodal(false);
     }
   };
@@ -635,7 +700,7 @@ export const AIStudioPage = () => {
       case 'deep-research':
         return {
           title: 'Deep Research Mode',
-          desc: 'Synthesizing multi-section analytical report',
+          desc: 'Multi-query empirical synthesis & structured report',
           icon: Compass,
           color: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
         };
@@ -722,7 +787,7 @@ export const AIStudioPage = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-100">AI Studio Workspace</h1>
-              <p className="text-xs text-slate-400">Multi-tool intelligent inference, image synthesis, web search & multimodal workbench</p>
+              <p className="text-xs text-slate-400">Multi-tool intelligent inference, image synthesis, web search & deep research workbench</p>
             </div>
           </div>
         </div>
@@ -937,7 +1002,7 @@ export const AIStudioPage = () => {
                   onClick={() => setActiveMode(activeMode === 'deep-research' ? null : 'deep-research')}
                   className={`p-2 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all ${
                     activeMode === 'deep-research'
-                      ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
+                      ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-sm'
                       : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -1006,6 +1071,8 @@ export const AIStudioPage = () => {
                         ? 'bg-gradient-to-tr from-indigo-600 to-purple-600 text-white'
                         : msg.isImage
                         ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                        : msg.isDeepResearch
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
                         : msg.isSearch
                         ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
                         : 'bg-slate-800 text-indigo-400 border border-slate-700'
@@ -1015,6 +1082,8 @@ export const AIStudioPage = () => {
                       <User className="w-4 h-4" />
                     ) : msg.isImage ? (
                       <Wand2 className="w-4 h-4" />
+                    ) : msg.isDeepResearch ? (
+                      <Compass className="w-4 h-4" />
                     ) : msg.isSearch ? (
                       <Globe className="w-4 h-4" />
                     ) : (
@@ -1030,6 +1099,8 @@ export const AIStudioPage = () => {
                           ? 'You'
                           : msg.isImage
                           ? 'Nexus Image AI'
+                          : msg.isDeepResearch
+                          ? `${msg.model || 'Nexus AI'} • Deep Research`
                           : msg.isSearch
                           ? `${msg.model || 'Nexus AI'} • Web Search`
                           : msg.model || 'Nexus AI'}
@@ -1039,7 +1110,12 @@ export const AIStudioPage = () => {
                           {msg.stylePreset || 'Image'} • {msg.aspectRatio || '1:1'}
                         </span>
                       )}
-                      {modeInfo && !msg.isImage && (
+                      {msg.isDeepResearch && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold border text-purple-400 border-purple-500/30 bg-purple-500/10">
+                          {msg.totalQueriesExecuted || 4} Queries • {msg.sources?.length || 0} Sources
+                        </span>
+                      )}
+                      {modeInfo && !msg.isImage && !msg.isDeepResearch && (
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${modeInfo.color}`}>
                           {modeInfo.title}
                         </span>
@@ -1113,7 +1189,7 @@ export const AIStudioPage = () => {
                       </div>
                     )}
 
-                    {/* Image Result Card (Phase 5B) */}
+                    {/* Image Result Card */}
                     {msg.isImage ? (
                       <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 shadow-xl space-y-3 max-w-lg">
                         <div
@@ -1180,6 +1256,190 @@ export const AIStudioPage = () => {
                           </div>
                         </div>
                       </div>
+                    ) : msg.isDeepResearch ? (
+                      /* Deep Research Report Card (Phase 5D) */
+                      <div className="p-5 rounded-2xl bg-slate-950/90 border border-purple-500/30 text-slate-200 shadow-2xl space-y-4">
+                        {/* Report Header */}
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                              <Compass className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-bold text-slate-100">Deep Research Synthesis Report</h3>
+                              <p className="text-[11px] text-purple-300/80 font-medium truncate max-w-md">
+                                Topic: {msg.topic}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-purple-950/80 text-purple-300 border border-purple-500/30">
+                              {msg.totalQueriesExecuted || 4} Multi-Pass Searches
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Executive Summary */}
+                        {msg.executiveSummary && (
+                          <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
+                              <Award className="w-3.5 h-3.5" />
+                              Executive Summary
+                            </h4>
+                            <div className="text-xs text-slate-200 leading-relaxed">
+                              {renderFormattedContentWithCitations(msg.executiveSummary, msg.citations, msg.sources)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Key Findings */}
+                        {msg.keyFindings && msg.keyFindings.length > 0 && (
+                          <div className="space-y-2 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Key Empirical Findings
+                            </h4>
+                            <ul className="space-y-1.5 text-xs text-slate-300">
+                              {msg.keyFindings.map((finding, fIdx) => (
+                                <li key={fIdx} className="flex items-start gap-2">
+                                  <span className="text-purple-400 font-bold">•</span>
+                                  <span className="flex-1">
+                                    {renderFormattedContentWithCitations(finding, msg.citations, msg.sources)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Detailed Analysis */}
+                        {msg.detailedAnalysis && (
+                          <div className="space-y-2 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1.5">
+                              <BarChart3 className="w-3.5 h-3.5" />
+                              Detailed Technical Synthesis
+                            </h4>
+                            <div className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap">
+                              {renderFormattedContentWithCitations(msg.detailedAnalysis, msg.citations, msg.sources)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Contradictions / Discrepancies if present */}
+                        {msg.contradictions && !msg.contradictions.isBlank && (
+                          <div className="space-y-1.5 p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-amber-200">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              Contradictions & Opposing Evidence
+                            </h4>
+                            <div className="text-xs leading-relaxed">
+                              {renderFormattedContentWithCitations(msg.contradictions, msg.citations, msg.sources)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Limitations & Conclusion */}
+                        {msg.conclusion && (
+                          <div className="space-y-1.5 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              Strategic Conclusion & Outlook
+                            </h4>
+                            <div className="text-xs text-slate-300 leading-relaxed">
+                              {renderFormattedContentWithCitations(msg.conclusion, msg.citations, msg.sources)}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Authoritative Sources Panel */}
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="pt-3 border-t border-slate-800 space-y-2">
+                            <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
+                              <div className="flex items-center space-x-1.5 text-purple-400">
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span>Verified Research Sources ({msg.sources.length})</span>
+                              </div>
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                Provider: {msg.searchProvider || 'Tavily'}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {msg.sources.map((src, sIdx) => {
+                                const isValidUrl =
+                                  src.url && (src.url.startsWith('https://') || src.url.startsWith('http://'));
+                                return (
+                                  <a
+                                    key={src.id || sIdx}
+                                    href={isValidUrl ? src.url : '#'}
+                                    target={isValidUrl ? '_blank' : '_self'}
+                                    rel="noopener noreferrer"
+                                    className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-purple-500/50 hover:bg-slate-900 text-left flex flex-col justify-between transition-all group shadow-sm"
+                                  >
+                                    <div className="space-y-1">
+                                      <div className="flex items-center justify-between text-[10px]">
+                                        <span className="px-1.5 py-0.2 rounded font-bold text-purple-300 bg-purple-500/20 border border-purple-500/30">
+                                          [{src.id || `S${sIdx + 1}`}] {src.sourceName || 'Source'}
+                                        </span>
+                                        {src.relevanceScore && (
+                                          <span className="text-[10px] text-emerald-400 font-mono">
+                                            {(src.relevanceScore * 100).toFixed(0)}% Authority
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs font-medium text-slate-200 group-hover:text-purple-300 line-clamp-1">
+                                        {src.title}
+                                      </p>
+                                      <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                                        {src.snippet}
+                                      </p>
+                                    </div>
+                                    <div className="mt-2 pt-1 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 group-hover:text-purple-400">
+                                      <span className="truncate max-w-[180px]">{src.url}</span>
+                                      <ExternalLink className="w-3 h-3 shrink-0 ml-1" />
+                                    </div>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Report Footer / Actions */}
+                        <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="font-mono text-slate-500">
+                            ~{msg.tokens} tokens • Multi-Source Synthesized
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => handleSend(null, msg.topic)}
+                              className="px-2.5 py-1 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 flex items-center space-x-1 transition-all"
+                              title="Regenerate Deep Research"
+                            >
+                              <RotateCcw className="w-3 h-3 text-purple-400" />
+                              <span className="text-[10px] font-medium">Re-Run Research</span>
+                            </button>
+                            <button
+                              onClick={() => handleCopy(msg.detailedAnalysis || msg.executiveSummary, index)}
+                              className="p-1.5 rounded-lg text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
+                              title="Copy Report"
+                            >
+                              {copiedIndex === index ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => deleteMessage(msg.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-all"
+                              title="Delete Message"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       /* Standard Text / Search Bubble */
                       <div
@@ -1197,7 +1457,7 @@ export const AIStudioPage = () => {
                               : msg.content}
                           </p>
 
-                          {/* Sources Card Section (Phase 5C Real Web Search) */}
+                          {/* Sources Card Section */}
                           {msg.isSearch && msg.sources && msg.sources.length > 0 && (
                             <div className="pt-3 mt-3 border-t border-slate-800/80 space-y-2">
                               <div className="flex items-center justify-between text-xs font-semibold text-slate-300">
@@ -1286,6 +1546,8 @@ export const AIStudioPage = () => {
                   className={`w-8 h-8 rounded-xl flex items-center justify-center shadow-md ${
                     activeMode === 'image'
                       ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40'
+                      : activeMode === 'deep-research'
+                      ? 'bg-purple-600/30 text-purple-300 border border-purple-500/40'
                       : activeMode === 'web-search'
                       ? 'bg-sky-600/30 text-sky-300 border border-sky-500/40'
                       : 'bg-slate-800 text-indigo-400 border border-slate-700'
@@ -1293,6 +1555,8 @@ export const AIStudioPage = () => {
                 >
                   {activeMode === 'image' ? (
                     <Wand2 className="w-4 h-4 animate-spin" />
+                  ) : activeMode === 'deep-research' ? (
+                    <Compass className="w-4 h-4 animate-spin" />
                   ) : activeMode === 'web-search' ? (
                     <Globe className="w-4 h-4 animate-spin" />
                   ) : (
@@ -1308,6 +1572,28 @@ export const AIStudioPage = () => {
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           Synthesizing in {imageStylePreset} style ({imageAspectRatio})...
                         </p>
+                      </div>
+                    </div>
+                  ) : activeMode === 'deep-research' ? (
+                    <div className="p-4 rounded-2xl bg-slate-950/90 border border-purple-500/30 text-purple-300 text-xs space-y-2 shadow-lg animate-in fade-in">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-ping" />
+                        <div>
+                          <p className="font-semibold text-purple-200">
+                            {researchStage <= 1
+                              ? '🔭 Planning multi-angle research queries...'
+                              : researchStage === 2
+                              ? '🌐 Querying multiple live search indexes...'
+                              : researchStage === 3
+                              ? '🔎 Evaluating source authority & evidence...'
+                              : researchStage === 4
+                              ? '🔁 Performing in-depth follow-up inquiries...'
+                              : '🧠 Synthesizing structured research report with citations...'}
+                          </p>
+                          <p className="text-[11px] text-slate-400 mt-0.5">
+                            Cross-verifying empirical documentation and grounding technical assertions...
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ) : activeMode === 'web-search' ? (
@@ -1524,10 +1810,10 @@ export const AIStudioPage = () => {
                 placeholder={
                   activeMode === 'image'
                     ? 'Describe the image you want to create...'
+                    : activeMode === 'deep-research'
+                    ? 'Enter complex topic for multi-query deep research & report synthesis...'
                     : activeMode === 'web-search'
                     ? 'Search the web and ask anything...'
-                    : activeMode === 'deep-research'
-                    ? 'Enter topic for deep multi-perspective research...'
                     : attachments.length > 0
                     ? 'Ask questions about the attached file(s)...'
                     : 'Ask anything'
@@ -1565,14 +1851,26 @@ export const AIStudioPage = () => {
                 className={`w-9 h-9 rounded-full flex items-center justify-center text-white shadow-md disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
                   activeMode === 'image'
                     ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/20'
+                    : activeMode === 'deep-research'
+                    ? 'bg-purple-600 hover:bg-purple-500 shadow-purple-500/20'
                     : activeMode === 'web-search'
                     ? 'bg-sky-600 hover:bg-sky-500 shadow-sky-500/20'
                     : 'bg-blue-600 hover:bg-blue-500 shadow-blue-500/20'
                 }`}
-                title={activeMode === 'image' ? 'Generate Image' : activeMode === 'web-search' ? 'Search Web & Answer' : 'Send Prompt'}
+                title={
+                  activeMode === 'image'
+                    ? 'Generate Image'
+                    : activeMode === 'deep-research'
+                    ? 'Execute Deep Research'
+                    : activeMode === 'web-search'
+                    ? 'Search Web & Answer'
+                    : 'Send Prompt'
+                }
               >
                 {activeMode === 'image' ? (
                   <Wand2 className="w-4 h-4" />
+                ) : activeMode === 'deep-research' ? (
+                  <Compass className="w-4 h-4" />
                 ) : activeMode === 'web-search' ? (
                   <Globe className="w-4 h-4" />
                 ) : (

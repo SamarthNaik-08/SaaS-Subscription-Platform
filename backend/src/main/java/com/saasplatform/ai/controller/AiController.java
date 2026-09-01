@@ -1,6 +1,9 @@
 package com.saasplatform.ai.controller;
 
 import com.saasplatform.ai.dto.*;
+import com.saasplatform.ai.research.dto.DeepResearchRequest;
+import com.saasplatform.ai.research.dto.DeepResearchResponse;
+import com.saasplatform.ai.research.service.DeepResearchService;
 import com.saasplatform.ai.search.dto.*;
 import com.saasplatform.ai.search.service.WebSearchService;
 import com.saasplatform.ai.service.AiService;
@@ -26,6 +29,7 @@ public class AiController {
 
     private final AiService aiService;
     private final WebSearchService webSearchService;
+    private final DeepResearchService deepResearchService;
 
     @PostMapping("/generate")
     public ResponseEntity<ApiResponse<AiGenerateResponse>> generate(
@@ -81,6 +85,15 @@ public class AiController {
     ) {
         AiSearchGenerateResponse response = webSearchService.searchAndSynthesize(userPrincipal.getId(), request);
         return ResponseEntity.ok(ApiResponse.success(response, "Web search and synthesis completed successfully"));
+    }
+
+    @PostMapping("/research")
+    public ResponseEntity<ApiResponse<DeepResearchResponse>> research(
+            @Valid @RequestBody DeepResearchRequest request,
+            @AuthenticationPrincipal UserPrincipal userPrincipal
+    ) {
+        DeepResearchResponse response = deepResearchService.performDeepResearch(userPrincipal.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Deep research synthesis completed successfully"));
     }
 
     @GetMapping("/models")
