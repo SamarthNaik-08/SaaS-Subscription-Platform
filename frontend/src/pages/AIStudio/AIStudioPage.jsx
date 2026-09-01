@@ -17,6 +17,7 @@ import {
   Search,
   Brain,
   Mic,
+  MicOff,
   AudioWaveform,
   X,
   FileText,
@@ -37,14 +38,14 @@ import {
   Link as LinkIcon,
   Calendar,
   ShieldCheck,
-  FileSpreadsheet,
-  BarChart3,
-  Bookmark,
   Award,
+  BarChart3,
+  Languages,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { aiService } from '../../services/aiService';
 import { usageService } from '../../services/usageService';
+import { speechService, SUPPORTED_LANGUAGES } from '../../services/speechService';
 
 export const AIStudioPage = () => {
   const navigate = useNavigate();
@@ -62,8 +63,8 @@ export const AIStudioPage = () => {
     },
   ]);
   const [loading, setLoading] = useState(false);
-  const [searchStage, setSearchStage] = useState(0); // 0: Idle, 1: Searching, 2: Reviewing, 3: Synthesizing
-  const [researchStage, setResearchStage] = useState(0); // 0..5 stages for Deep Research
+  const [searchStage, setSearchStage] = useState(0);
+  const [researchStage, setResearchStage] = useState(0);
   const [isProcessingMultimodal, setIsProcessingMultimodal] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [systemInstruction, setSystemInstruction] = useState('');
@@ -71,6 +72,13 @@ export const AIStudioPage = () => {
   const [currentUsage, setCurrentUsage] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(false);
+
+  // Phase 5E Voice Input / Speech-to-Text State
+  const [isListening, setIsListening] = useState(false);
+  const [speechLanguage, setSpeechLanguage] = useState(speechService.getSelectedLanguage());
+  const [isSpeechSupported] = useState(speechService.isSpeechRecognitionSupported());
+  const [preSpeechPrompt, setPreSpeechPrompt] = useState('');
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
 
   // Action Menu, Mode, Image & Multimodal State
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
@@ -89,28 +97,33 @@ export const AIStudioPage = () => {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const actionMenuRef = useRef(null);
+  const langMenuRef = useRef(null);
 
   useEffect(() => {
     loadModels();
     loadUsage();
+    return () => {
+      speechService.abortRecognition();
+    };
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Click outside to close action menu
+  // Click outside to close action menu and language menu
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (actionMenuRef.current && !actionMenuRef.current.contains(e.target)) {
         setIsActionMenuOpen(false);
       }
+      if (langMenuRef.current && !langMenuRef.current.contains(e.target)) {
+        setIsLangMenuOpen(false);
+      }
     };
-    if (isActionMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isActionMenuOpen]);
+  }, []);
 
   const loadModels = async () => {
     try {
@@ -129,6 +142,56 @@ export const AIStudioPage = () => {
       setCurrentUsage(data);
     } catch (e) {
       console.warn('Failed to load usage in AI Studio', e);
+    }
+  };
+
+  // Phase 5E Voice Recognition Toggle Handler
+  const handleToggleVoice = () => {
+    if (!isSpeechSupported) {
+      setErrorMsg("Voice input isn't supported in this browser. Please try Chrome or a Web Speech-compatible browser.");
+      return;
+    }
+
+    if (isListening) {
+      speechService.stopRecognition();
+      setIsListening(false);
+      return;
+    }
+
+    setErrorMsg(null);
+    const existingText = prompt;
+    setPreSpeechPrompt(existingText);
+
+    speechService.startRecognition({
+      language: speechLanguage,
+      onStart: () => {
+        setIsListening(true);
+      },
+      onTranscript: ({ interim, final }) => {
+        const spokenParts = [final, interim].filter(Boolean).join(' ').trim();
+        if (existingText) {
+          setPrompt(`${existingText} ${spokenParts}`.trim());
+        } else {
+          setPrompt(spokenParts);
+        }
+      },
+      onError: (errorMessage) => {
+        setErrorMsg(errorMessage);
+        setIsListening(false);
+      },
+      onEnd: () => {
+        setIsListening(false);
+      },
+    });
+  };
+
+  const handleSelectLanguage = (langCode) => {
+    setSpeechLanguage(langCode);
+    speechService.setSelectedLanguage(langCode);
+    setIsLangMenuOpen(false);
+    if (isListening) {
+      speechService.stopRecognition();
+      setIsListening(false);
     }
   };
 
@@ -226,7 +289,7 @@ export const AIStudioPage = () => {
       id: 'deep-research',
       icon: Compass,
       title: 'Deep research',
-      subtitle: 'Multi-query empirical synthesis and report',
+      subtitle: 'Multi-query empirical synthesis & report',
       action: () => {
         setActiveMode('deep-research');
         setIsActionMenuOpen(false);
@@ -333,6 +396,11 @@ export const AIStudioPage = () => {
 
   const handleSend = async (e, overridePrompt = null) => {
     e?.preventDefault();
+    if (isListening) {
+      speechService.stopRecognition();
+      setIsListening(false);
+    }
+
     const targetPrompt = (overridePrompt !== null ? overridePrompt : prompt).trim();
     if ((!targetPrompt && attachments.length === 0) || loading) return;
 
@@ -417,7 +485,7 @@ export const AIStudioPage = () => {
           }
         }
       } else if (activeMode === 'deep-research') {
-        // 2. Real Deep Research Pipeline Workflow (Phase 5D)
+        // 2. Deep Research Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Conduct rigorous multi-perspective reasoning and empirical cross-verification.';
@@ -473,7 +541,7 @@ export const AIStudioPage = () => {
           }
         }
       } else if (activeMode === 'web-search') {
-        // 3. Real Web Search Workflow
+        // 3. Web Search Workflow
         let enrichedSystemInstruction = systemInstruction || '';
         if (isThinkActive) {
           enrichedSystemInstruction += ' Provide structured multi-perspective analysis and reasoning.';
@@ -537,7 +605,7 @@ export const AIStudioPage = () => {
           }
         }
       } else if (hasFiles) {
-        // 4. Multimodal File & Image Understanding Workflow
+        // 4. Multimodal Workflow
         const formData = new FormData();
         formData.append('prompt', targetPrompt || 'Please analyze and summarize the attached files in detail.');
         formData.append('model', model);
@@ -718,6 +786,7 @@ export const AIStudioPage = () => {
 
   const activeModeDetails = getModeDetails(activeMode);
   const aiQuota = currentUsage?.metrics?.AI_REQUEST;
+  const currentLangObj = SUPPORTED_LANGUAGES.find((l) => l.code === speechLanguage) || SUPPORTED_LANGUAGES[0];
 
   return (
     <div className="space-y-6">
@@ -787,7 +856,7 @@ export const AIStudioPage = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-slate-100">AI Studio Workspace</h1>
-              <p className="text-xs text-slate-400">Multi-tool intelligent inference, image synthesis, web search & deep research workbench</p>
+              <p className="text-xs text-slate-400">Multi-tool intelligent inference, image synthesis, voice input & deep research workbench</p>
             </div>
           </div>
         </div>
@@ -817,19 +886,28 @@ export const AIStudioPage = () => {
         )}
       </div>
 
-      {/* Quota Exceeded Alert Banner */}
-      {isQuotaExceeded && (
+      {/* Error Alert Banner */}
+      {errorMsg && (
         <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center space-x-3 text-rose-300 text-sm">
             <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
             <span>{errorMsg}</span>
           </div>
-          <button
-            onClick={() => navigate('/subscription')}
-            className="px-4 py-1.5 rounded-lg text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white shadow-md transition-all shrink-0"
-          >
-            Upgrade Plan
-          </button>
+          {isQuotaExceeded ? (
+            <button
+              onClick={() => navigate('/subscription')}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white shadow-md transition-all shrink-0"
+            >
+              Upgrade Plan
+            </button>
+          ) : (
+            <button
+              onClick={() => setErrorMsg(null)}
+              className="p-1 rounded-lg text-rose-400 hover:text-rose-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )}
 
@@ -1031,13 +1109,17 @@ export const AIStudioPage = () => {
                   {
                     id: 'welcome-msg',
                     role: 'assistant',
-                    content: 'Conversation reset. Enter a new prompt to start.',
+                    content: 'Conversation reset. Enter a new prompt or use voice input to start.',
                     tokens: 10,
                     timestamp: new Date().toLocaleTimeString(),
                   },
                 ]);
                 setAttachments([]);
                 setActiveMode(null);
+                if (isListening) {
+                  speechService.stopRecognition();
+                  setIsListening(false);
+                }
               }}
               className="w-full flex items-center justify-center space-x-2 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-200 bg-slate-950/60 hover:bg-slate-800 border border-slate-800 transition-all"
             >
@@ -1257,7 +1339,7 @@ export const AIStudioPage = () => {
                         </div>
                       </div>
                     ) : msg.isDeepResearch ? (
-                      /* Deep Research Report Card (Phase 5D) */
+                      /* Deep Research Report Card */
                       <div className="p-5 rounded-2xl bg-slate-950/90 border border-purple-500/30 text-slate-200 shadow-2xl space-y-4">
                         {/* Report Header */}
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
@@ -1735,6 +1817,32 @@ export const AIStudioPage = () => {
               </div>
             )}
 
+            {/* Language Selector Popover (Phase 5E Voice) */}
+            {isLangMenuOpen && (
+              <div
+                ref={langMenuRef}
+                className="absolute bottom-20 right-14 z-20 w-48 bg-[#18181b]/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 animate-in fade-in"
+              >
+                <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                  Voice Input Language
+                </div>
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => handleSelectLanguage(lang.code)}
+                    className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-medium flex items-center justify-between transition-colors ${
+                      speechLanguage === lang.code
+                        ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/40'
+                        : 'text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    <span>{lang.name}</span>
+                    {speechLanguage === lang.code && <Check className="w-3 h-3 text-indigo-400" />}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Active Mode Indicator Bar */}
             {activeModeDetails && (
               <div className="mb-3 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between animate-in fade-in">
@@ -1790,7 +1898,11 @@ export const AIStudioPage = () => {
             {/* Interactive Prompt Bar */}
             <form
               onSubmit={(e) => handleSend(e, null)}
-              className="flex items-center gap-2 p-1.5 rounded-2xl bg-[#111318] border border-slate-800/90 shadow-inner"
+              className={`flex items-center gap-2 p-1.5 rounded-2xl bg-[#111318] border transition-all shadow-inner ${
+                isListening
+                  ? 'border-rose-500/60 shadow-rose-500/10 ring-2 ring-rose-500/20'
+                  : 'border-slate-800/90'
+              }`}
             >
               <button
                 type="button"
@@ -1803,25 +1915,37 @@ export const AIStudioPage = () => {
                 <Plus className="w-5 h-5 transition-transform duration-200" />
               </button>
 
-              <input
-                type="text"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder={
-                  activeMode === 'image'
-                    ? 'Describe the image you want to create...'
-                    : activeMode === 'deep-research'
-                    ? 'Enter complex topic for multi-query deep research & report synthesis...'
-                    : activeMode === 'web-search'
-                    ? 'Search the web and ask anything...'
-                    : attachments.length > 0
-                    ? 'Ask questions about the attached file(s)...'
-                    : 'Ask anything'
-                }
-                disabled={loading || isQuotaExceeded}
-                className="flex-1 px-3 py-2 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-50"
-              />
+              <div className="flex-1 flex items-center relative min-w-0">
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder={
+                    isListening
+                      ? `Listening in ${currentLangObj.name}... Speak now.`
+                      : activeMode === 'image'
+                      ? 'Describe the image you want to create...'
+                      : activeMode === 'deep-research'
+                      ? 'Enter complex topic for multi-query deep research & report synthesis...'
+                      : activeMode === 'web-search'
+                      ? 'Search the web and ask anything...'
+                      : attachments.length > 0
+                      ? 'Ask questions about the attached file(s)...'
+                      : 'Ask anything or speak'
+                  }
+                  disabled={loading || isQuotaExceeded}
+                  className="w-full px-3 py-2 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none disabled:opacity-50"
+                />
 
+                {isListening && (
+                  <span className="flex items-center space-x-1 px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-500/40 text-[10px] text-rose-300 animate-pulse shrink-0 mr-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                    <span>Listening</span>
+                  </span>
+                )}
+              </div>
+
+              {/* Think Button */}
               <button
                 type="button"
                 onClick={() => setIsThinkActive(!isThinkActive)}
@@ -1836,15 +1960,42 @@ export const AIStudioPage = () => {
                 <span>Think</span>
               </button>
 
+              {/* Language Selector Button */}
               <button
                 type="button"
-                onClick={() => {}}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors shrink-0"
-                title="Voice Input"
+                onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+                className="p-1.5 px-2 rounded-xl text-[10px] font-bold text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition-colors shrink-0 flex items-center gap-1 border border-slate-800/60"
+                title={`Speech Language: ${currentLangObj.name} (Click to change)`}
               >
-                <Mic className="w-4 h-4" />
+                <Languages className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{speechLanguage.split('-')[0].toUpperCase()}</span>
               </button>
 
+              {/* Real Voice / Microphone Button (Phase 5E) */}
+              <button
+                type="button"
+                onClick={handleToggleVoice}
+                className={`p-2 rounded-xl transition-all shrink-0 ${
+                  isListening
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/40 animate-pulse'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+                title={
+                  !isSpeechSupported
+                    ? 'Voice input not supported in this browser'
+                    : isListening
+                    ? 'Stop listening'
+                    : `Voice input (${currentLangObj.name})`
+                }
+              >
+                {isListening ? (
+                  <MicOff className="w-4 h-4 text-white" />
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Send Button */}
               <button
                 type="submit"
                 disabled={(!prompt.trim() && attachments.length === 0) || loading || isQuotaExceeded}
