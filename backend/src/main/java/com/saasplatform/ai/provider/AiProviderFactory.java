@@ -59,10 +59,21 @@ public class AiProviderFactory {
 
     public List<Map<String, String>> getAvailableModels() {
         return List.of(
-                Map.of("id", "gemini-2.5-flash", "name", "Gemini 2.5 Flash (Fast & Next-Gen)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
-                Map.of("id", "gemini-2.5-pro", "name", "Gemini 2.5 Pro (Deep Reasoning)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
-                Map.of("id", "gpt-4o", "name", "GPT-4o (High-Throughput Multimodal)", "provider", "OpenAI", "available", String.valueOf(openAiProvider.isAvailable())),
-                Map.of("id", "gpt-4o-mini", "name", "GPT-4o Mini (Cost-Optimized)", "provider", "OpenAI", "available", String.valueOf(openAiProvider.isAvailable()))
+                createModelMap("gemini-1.5-flash", "Gemini 1.5 Flash (Ultra Fast)", "Google", geminiAiProvider.isAvailable()),
+                createModelMap("gemini-2.0-flash", "Gemini 2.0 Flash (Next-Gen)", "Google", geminiAiProvider.isAvailable()),
+                createModelMap("gemini-1.5-pro", "Gemini 1.5 Pro (Deep Analysis)", "Google", geminiAiProvider.isAvailable()),
+                createModelMap("gemini-2.5-flash", "Gemini 2.5 Flash (Preview)", "Google", geminiAiProvider.isAvailable()),
+                createModelMap("gpt-4o", "GPT-4o (Multimodal)", "OpenAI", openAiProvider.isAvailable()),
+                createModelMap("gpt-4o-mini", "GPT-4o Mini (Fast)", "OpenAI", openAiProvider.isAvailable())
+        );
+    }
+
+    private Map<String, String> createModelMap(String id, String name, String provider, boolean available) {
+        return Map.of(
+                "id", id,
+                "name", name,
+                "provider", provider,
+                "available", String.valueOf(available)
         );
     }
 }

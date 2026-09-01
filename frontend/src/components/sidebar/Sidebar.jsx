@@ -2,7 +2,6 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Sparkles,
-  LayoutDashboard,
   Activity,
   CreditCard,
   Receipt,
@@ -18,7 +17,6 @@ export const Sidebar = ({ isOpen, onClose }) => {
 
   const navItems = [
     { name: 'AI Studio', path: '/studio', icon: Sparkles, badge: 'Active' },
-    { name: 'Overview', path: '/dashboard', icon: LayoutDashboard, badge: null },
     { name: 'Quota & Usage', path: '/usage', icon: Activity, badge: null },
     { name: 'Plan & Billing', path: '/subscription', icon: CreditCard, badge: null },
     { name: 'Invoices', path: '/invoices', icon: Receipt, badge: null },

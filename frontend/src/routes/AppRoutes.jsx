@@ -49,8 +49,8 @@ export const AppRoutes = () => {
           </ProtectedRoute>
         }
       >
-        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/studio" element={<AIStudioPage />} />
+        <Route path="/dashboard" element={<Navigate to="/studio" replace />} />
         <Route path="/ai-studio" element={<Navigate to="/studio" replace />} />
         <Route path="/usage" element={<UsagePage />} />
         <Route path="/subscription" element={<SubscriptionPage />} />
@@ -82,7 +82,7 @@ export const AppRoutes = () => {
       </Route>
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/studio" replace />} />
     </Routes>
   );
 };

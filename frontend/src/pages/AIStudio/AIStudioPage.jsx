@@ -7,20 +7,36 @@ import { speechService, SUPPORTED_LANGUAGES } from '../../services/speechService
 
 const AVAILABLE_MODELS = [
   {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash',
+    category: 'Ultra-Fast',
+    speed: 'Fast',
+    provider: 'Google',
+    description: 'High-speed, production-grade model optimized for rapid assistance and coding tasks.',
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
     category: 'Next-Gen',
     speed: 'Fast',
     provider: 'Google',
     description: 'Ultra-fast multimodal model with state-of-the-art response speed and high reasoning capability.',
   },
   {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
     category: 'Pro',
     speed: 'Reasoning',
     provider: 'Google',
     description: 'Deep analytical model with extended context window for complex synthesis.',
+  },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    category: 'Preview',
+    speed: 'Fast',
+    provider: 'Google',
+    description: 'Next-generation Gemini preview model.',
   },
   {
     id: 'gpt-4o',
@@ -43,7 +59,7 @@ const AVAILABLE_MODELS = [
 export const AIStudioPage = () => {
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState('gemini-2.5-flash');
+  const [model, setModel] = useState('gemini-1.5-flash');
   const [modelsList, setModelsList] = useState(AVAILABLE_MODELS);
   const [messages, setMessages] = useState([
     {

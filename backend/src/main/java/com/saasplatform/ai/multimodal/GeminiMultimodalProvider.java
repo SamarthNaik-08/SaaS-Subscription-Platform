@@ -39,7 +39,7 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
 
     @Override
     public String processMultimodal(String prompt, List<MultimodalAttachment> attachments, String model, Map<String, Object> options) {
-        String targetModel = (model != null && !model.isBlank()) ? normalizeModel(model) : "gemini-2.5-flash";
+        String targetModel = (model != null && !model.isBlank()) ? normalizeModel(model) : "gemini-1.5-flash";
         log.info("[Gemini Multimodal] Processing multimodal inference with model: {}, attachments: {}", 
                 targetModel, attachments != null ? attachments.size() : 0);
 
@@ -104,8 +104,13 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
     private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody) {
         List<String[]> candidates = List.of(
                 new String[]{"v1beta", preferredModel},
+                new String[]{"v1beta", "gemini-1.5-flash"},
+                new String[]{"v1beta", "gemini-2.0-flash"},
                 new String[]{"v1beta", "gemini-2.5-flash"},
-                new String[]{"v1beta", "gemini-2.5-pro"}
+                new String[]{"v1beta", "gemini-1.5-pro"},
+                new String[]{"v1beta", "gemini-pro"},
+                new String[]{"v1", "gemini-1.5-flash"},
+                new String[]{"v1", "gemini-pro"}
         );
 
         RestClientResponseException lastException = null;
@@ -160,8 +165,15 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
             detail = e.getMessage();
         }
 
-        if (e.getStatusCode().value() == 404) {
-            return "⚠️ The selected Google Gemini model is currently unavailable for multimodal inference. Please select another model.";
+        if (e.getStatusCode().value() == 400 || e.getStatusCode().value() == 403) {
+            return String.format("""
+                    ⚠️ **Google Gemini API Key Error (%s)**
+                    
+                    Google Gemini returned: `%s`
+                    
+                    > **Tip:** Google AI Studio Gemini API keys start with **`AIzaSy...`** (from https://aistudio.google.com/app/apikey).
+                    > Please double-check the key in your `.env` file.
+                    """, e.getStatusCode(), detail);
         }
 
         return String.format("⚠️ **Google Gemini API Error (%s):** %s", e.getStatusCode(), detail);
@@ -169,13 +181,7 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
 
     private String normalizeModel(String model) {
         if (model == null || model.isBlank()) {
-            return "gemini-2.5-flash";
-        }
-        if (model.contains("gemini-2.5-flash") || model.contains("gemini-3") || model.contains("gemini-2.0") || model.contains("gemini-1.5-flash")) {
-            return "gemini-2.5-flash";
-        }
-        if (model.contains("gemini-2.5-pro") || model.contains("gemini-1.5-pro")) {
-            return "gemini-2.5-pro";
+            return "gemini-1.5-flash";
         }
         return model.trim();
     }

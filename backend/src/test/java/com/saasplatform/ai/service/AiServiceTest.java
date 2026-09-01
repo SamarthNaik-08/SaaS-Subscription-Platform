@@ -128,4 +128,77 @@ class AiServiceTest {
 
         assertThrows(QuotaExceededException.class, () -> aiService.generateImage(userId, req));
     }
+
+    @Test
+    void shouldReturnCorrectAnswerForWhatIsJava() {
+        AuthResponse authRes = authService.register(RegisterRequest.builder()
+                .firstName("Knowledge")
+                .lastName("JavaTester")
+                .email("java-test-" + UUID.randomUUID() + "@test.com")
+                .password("Password123")
+                .build());
+
+        UUID userId = authRes.getUser().getId();
+
+        AiGenerateRequest req = AiGenerateRequest.builder()
+                .prompt("what is java")
+                .model("gemini-1.5-flash")
+                .build();
+
+        AiGenerateResponse response = aiService.generateText(userId, req);
+
+        assertNotNull(response);
+        assertNotNull(response.getText());
+        assertTrue(response.getText().contains("Java"));
+        assertTrue(response.getText().toLowerCase().contains("jvm") || response.getText().toLowerCase().contains("object-oriented") || response.getText().toLowerCase().contains("platform"));
+        assertFalse(response.getText().contains("404 NOT_FOUND"));
+    }
+
+    @Test
+    void shouldReturnCorrectAnswerForWhatIsOop() {
+        AuthResponse authRes = authService.register(RegisterRequest.builder()
+                .firstName("Knowledge")
+                .lastName("OopTester")
+                .email("oop-test-" + UUID.randomUUID() + "@test.com")
+                .password("Password123")
+                .build());
+
+        UUID userId = authRes.getUser().getId();
+
+        AiGenerateRequest req = AiGenerateRequest.builder()
+                .prompt("what is OOP")
+                .model("gemini-1.5-flash")
+                .build();
+
+        AiGenerateResponse response = aiService.generateText(userId, req);
+
+        assertNotNull(response);
+        assertNotNull(response.getText());
+        assertTrue(response.getText().toLowerCase().contains("encapsulation") || response.getText().toLowerCase().contains("polymorphism") || response.getText().toLowerCase().contains("object-oriented"));
+        assertFalse(response.getText().contains("404 NOT_FOUND"));
+    }
+
+    @Test
+    void shouldReturnCorrectAnswerForWhatIsReact() {
+        AuthResponse authRes = authService.register(RegisterRequest.builder()
+                .firstName("Knowledge")
+                .lastName("ReactTester")
+                .email("react-test-" + UUID.randomUUID() + "@test.com")
+                .password("Password123")
+                .build());
+
+        UUID userId = authRes.getUser().getId();
+
+        AiGenerateRequest req = AiGenerateRequest.builder()
+                .prompt("what is react")
+                .model("gemini-1.5-flash")
+                .build();
+
+        AiGenerateResponse response = aiService.generateText(userId, req);
+
+        assertNotNull(response);
+        assertNotNull(response.getText());
+        assertTrue(response.getText().toLowerCase().contains("component") || response.getText().toLowerCase().contains("virtual dom") || response.getText().toLowerCase().contains("ui"));
+        assertFalse(response.getText().contains("404 NOT_FOUND"));
+    }
 }

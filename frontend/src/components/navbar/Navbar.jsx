@@ -36,10 +36,10 @@ export const Navbar = () => {
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (
               <Link
-                to="/dashboard"
+                to="/studio"
                 className="inline-flex items-center space-x-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-all shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50"
               >
-                <span>Dashboard</span>
+                <span>AI Studio</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             ) : (

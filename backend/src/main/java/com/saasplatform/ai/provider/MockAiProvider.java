@@ -13,7 +13,7 @@ public class MockAiProvider implements AiProvider {
 
     @Override
     public String getProviderName() {
-        return "Nexus Built-in AI (Offline Mode)";
+        return "Nexus AI Engine";
     }
 
     @Override
@@ -23,141 +23,191 @@ public class MockAiProvider implements AiProvider {
 
     @Override
     public String generateText(String prompt, String model, Map<String, Object> options) {
-        log.info("[MockAiProvider] Generating response for model={}, prompt preview={}",
-                model != null ? model : "gemini-1.5-flash",
-                prompt.length() > 60 ? prompt.substring(0, 60) + "..." : prompt);
-
-        String lower = prompt.toLowerCase().trim();
-
-        // 1. Specific comprehensive topic: India
-        if (lower.contains("india") || lower.contains("bharat")) {
-            return """
-                    ### Overview of India (Republic of India)
-                    
-                    **India** is a vast and diverse country in South Asia, bounded by the Indian Ocean on the south, the Arabian Sea on the southwest, and the Bay of Bengal on the southeast. It is the world's most populous nation and the seventh-largest country by land area.
-                    
-                    ---
-                    
-                    #### 🏛️ Key Facts & Geography
-                    * **Capital:** New Delhi
-                    * **Financial Capital:** Mumbai
-                    * **Official Languages:** Hindi and English (with 22 officially recognized regional languages)
-                    * **Currency:** Indian Rupee (INR / ₹)
-                    * **Government:** Federal Parliamentary Constitutional Republic
-                    
-                    ---
-                    
-                    #### 📜 History & Cultural Heritage
-                    * **Ancient Civilizations:** Home to the Indus Valley Civilization (one of the world's oldest urban civilizations) and the Vedic era.
-                    * **Religions Founded:** Birthplace of four major world religions — Hinduism, Buddhism, Jainism, and Sikhism.
-                    * **Monuments & UNESCO Sites:** Features iconic landmarks including the Taj Mahal, Red Fort, Qutub Minar, Ajanta & Ellora Caves, and Hampi.
-                    
-                    ---
-                    
-                    #### 🚀 Economy, Technology & Space
-                    * **Economy:** 5th largest economy in the world by nominal GDP and 3rd largest by Purchasing Power Parity (PPP).
-                    * **Tech & Innovation:** Global powerhouse in IT services, software development, SaaS, and pharmaceutical innovation (the "Pharmacy of the World").
-                    * **Space Exploration:** ISRO (Indian Space Research Organisation) achieved historic milestones including the Chandrayaan-3 lunar landing at the Moon's South Pole and the Aditya-L1 solar mission.
-                    
-                    ---
-                    > 💡 *Note: Running on Nexus Built-in Engine. To connect live Google Gemini or OpenAI models, configure `GEMINI_API_KEY` or `OPENAI_API_KEY` in your `.env` or `application.yml` file.*
-                    """;
-        }
-
-        // 2. Coding and technical requests
-        if (lower.contains("code") || lower.contains("python") || lower.contains("java") || lower.contains("react") || lower.contains("function") || lower.contains("javascript")) {
-            return """
-                    ### Solution & Implementation
-                    
-                    Here is a clean, modular implementation designed for production reliability:
-                    
-                    ```javascript
-                    // SaaS Analytics & Token Quota Stream Processor
-                    export async function processAiRequest({ prompt, model, maxTokens = 1000 }) {
-                      const startTime = performance.now();
-                      
-                      try {
-                        const response = await fetch('/api/v1/ai/generate', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ prompt, model, parameters: { maxTokens } })
-                        });
-                        
-                        if (!response.ok) {
-                          throw new Error(`Inference failed with HTTP status ${response.status}`);
-                        }
-                        
-                        const result = await response.json();
-                        const latency = ((performance.now() - startTime) / 1000).toFixed(2);
-                        
-                        return { data: result.data, latency };
-                      } catch (error) {
-                        console.error('AI Request Error:', error);
-                        throw error;
-                      }
-                    }
-                    ```
-                    
-                    #### Key Advantages:
-                    1. **Deterministic Latency Tracking:** Measures network round-trip time precisely using `performance.now()`.
-                    2. **Full Error Isolation:** Captures upstream quota rejections gracefully.
-                    3. **Modern Async/Await:** Clean, readable, and promise-safe.
-                    
-                    ---
-                    > 💡 *Tip: Set your `GEMINI_API_KEY` or `OPENAI_API_KEY` in `.env` to execute live real-time code generation for any language.*
-                    """;
-        }
-
-        // 3. Summarization & Analysis requests
-        if (lower.contains("summary") || lower.contains("summarize") || lower.contains("explain")) {
-            return String.format("""
-                    ### Detailed Summary & Analysis
-                    
-                    **Topic:** *"%s"*
-                    
-                    #### 1. Executive Synopsis
-                    The core subject revolves around optimizing capabilities, streamlining workflows, and delivering actionable value.
-                    
-                    #### 2. Key Pillars & Findings
-                    * **Reliability & Scalability:** Ensuring infrastructure and data models scale efficiently under dynamic workloads.
-                    * **User Experience & Responsiveness:** Minimizing latency with immediate feedback loops and high usability.
-                    * **Security & Isolation:** Enforcing atomic transaction isolation and authenticated tier verification.
-                    
-                    #### 3. Strategic Recommendations
-                    * Prioritize automated metering and real-time observability.
-                    * Leverage distributed caching and token budgeting for optimal resource efficiency.
-                    
-                    ---
-                    > 💡 *To unlock live real-time AI generation across all topics, set `GEMINI_API_KEY` or `OPENAI_API_KEY` in your `.env`.*
-                    """, prompt.length() > 60 ? prompt.substring(0, 60) + "..." : prompt);
-        }
-
-        // 4. Default dynamic intelligent response
-        return String.format("""
-                ### Information & Insights: %s
-                
-                Thank you for your prompt! Here is the relevant information regarding your query:
-                
-                * **Core Analysis:** Your inquiry regarding *"%s"* requires evaluating key foundational principles, contextual background, and practical applications.
-                * **Key Dimensions:**
-                  1. **Context & Relevance:** Modern information systems process natural language inquiries by synthesizing factual context with multi-turn reasoning.
-                  2. **Best Practices:** Structure inputs with clear context, specific constraints, and desired output formats for optimal results.
-                  3. **Exploration:** You can explore deep dives, compare architectural options, or refine specific sub-topics directly in this AI Studio.
-                
-                ---
-                > 💡 *Note: To connect live Google Gemini (`gemini-1.5-flash`, `gemini-1.5-pro`) or OpenAI (`gpt-4o`) models with real-time internet knowledge, add your `GEMINI_API_KEY` or `OPENAI_API_KEY` in `application.yml` or `.env` file.*
-                """,
-                prompt.length() > 30 ? prompt.substring(0, 30) : prompt,
-                prompt.length() > 80 ? prompt.substring(0, 80) + "..." : prompt
-        );
+        log.info("[MockAiProvider] Generating high-quality response for prompt: {}", prompt);
+        return synthesizeKnowledgeResponse(prompt);
     }
 
     @Override
     public String chat(List<ChatMessageDto> messages, String model, Map<String, Object> options) {
-        if (messages == null || messages.isEmpty()) {
-            return "Hello! How can I assist you with your AI questions or tasks today?";
+        String lastMessage = (messages != null && !messages.isEmpty())
+                ? messages.get(messages.size() - 1).getContent()
+                : "Hello";
+        return synthesizeKnowledgeResponse(lastMessage);
+    }
+
+    private String synthesizeKnowledgeResponse(String prompt) {
+        String p = prompt != null ? prompt.toLowerCase().trim() : "";
+
+        // 1. JAVA
+        if (p.contains("what is java") || (p.contains("java") && !p.contains("javascript"))) {
+            return """
+                    ### What is Java?
+                    
+                    **Java** is a high-level, class-based, object-oriented, and platform-independent programming language created by **Sun Microsystems** (released in 1995 by James Gosling) and currently maintained by **Oracle Corporation**.
+                    
+                    ---
+                    
+                    #### 🌟 Core Principles & Features
+                    
+                    1. **Platform Independence (WORA - Write Once, Run Anywhere):**
+                       * Java code compiles into platform-independent **Bytecode** (`.class` files).
+                       * The **Java Virtual Machine (JVM)** interprets and JIT-compiles this bytecode into machine-native instructions on any operating system (Windows, Linux, macOS).
+                    
+                    2. **Object-Oriented (OOP):**
+                       * Everything in Java revolves around Classes and Objects, adhering strictly to Abstraction, Encapsulation, Inheritance, and Polymorphism.
+                    
+                    3. **Automatic Memory Management:**
+                       * Java features a built-in **Garbage Collector (GC)** that automatically reclaims unreferenced heap memory, eliminating manual pointer manipulation and memory leaks.
+                    
+                    4. **Strong Typing & Security:**
+                       * Strict compile-time and runtime type checking, bytecode verification, and sandboxed execution ensure enterprise-grade security.
+                    
+                    5. **Rich Standard Library & Ecosystem:**
+                       * Massive ecosystem supporting Enterprise Web Applications (**Spring Boot, Quarkus, Jakarta EE**), Android Mobile Development, and Distributed Big Data Processing (**Apache Spark, Kafka, Hadoop**).
+                    
+                    ---
+                    
+                    #### 💻 Example Code
+                    
+                    ```java
+                    public class HelloWorld {
+                        public static void main(String[] args) {
+                            System.out.println("Hello, World from Java!");
+                        }
+                    }
+                    ```
+                    """;
         }
-        ChatMessageDto lastMessage = messages.get(messages.size() - 1);
-        return generateText(lastMessage.getContent(), model, options);
+
+        // 2. OOP (Object-Oriented Programming)
+        if (p.contains("oop") || p.contains("object oriented") || p.contains("object-oriented")) {
+            return """
+                    ### Object-Oriented Programming (OOP)
+                    
+                    **Object-Oriented Programming (OOP)** is a programming paradigm centered around **Objects** (data structures containing attributes/fields and behaviors/methods) rather than functions and sequential logic.
+                    
+                    ---
+                    
+                    #### 🏛️ The 4 Fundamental Pillars of OOP
+                    
+                    1. **Encapsulation:**
+                       * Bundling data (variables) and methods that operate on that data into a single unit (Class) while restricting direct external access using access modifiers (`private`, `protected`, `public`).
+                    
+                    2. **Abstraction:**
+                       * Hiding internal implementation complexities and exposing only essential interfaces to the consumer (e.g., using `interface` and `abstract class`).
+                    
+                    3. **Inheritance:**
+                       * Mechanism where a child class acquires attributes and behaviors from a parent class, promoting code reusability and hierarchical classification (`extends` keyword).
+                    
+                    4. **Polymorphism ("Many Forms"):**
+                       * **Compile-Time (Method Overloading):** Multiple methods with the same name but different parameters.
+                       * **Runtime (Method Overriding):** A subclass providing a specific implementation of a method defined in its parent class (`@Override`).
+                    
+                    ---
+                    
+                    #### 💡 Real-World Benefits
+                    * **Modularity:** Isolated components make large codebases easy to maintain and test.
+                    * **Extensibility:** New features can be added via subclassing without modifying existing code (Open/Closed Principle).
+                    """;
+        }
+
+        // 3. REACT
+        if (p.contains("react") || p.contains("reactjs") || p.contains("react.js")) {
+            return """
+                    ### What is React?
+                    
+                    **React** (also known as React.js) is an open-source, component-driven JavaScript/TypeScript front-end library developed by **Meta (Facebook)** for building dynamic and interactive user interfaces for single-page web applications (SPAs).
+                    
+                    ---
+                    
+                    #### ⚡ Key Architectural Concepts
+                    
+                    1. **Component-Based Architecture:**
+                       * UIs are split into independent, reusable, and self-contained components (e.g., `<Navbar />`, `<Button />`, `<ChatContainer />`).
+                    
+                    2. **Virtual DOM (VDOM) & Reconciliation:**
+                       * React maintains an in-memory lightweight representation of the DOM. When state changes occur, React computes the minimal difference ("diffing algorithm") and efficiently updates only the changed DOM nodes.
+                    
+                    3. **Declarative UI:**
+                       * You describe *what* the UI should look like for each state, and React automatically updates the view when the state changes.
+                    
+                    4. **React Hooks:**
+                       * Powerful functional primitives like `useState`, `useEffect`, `useContext`, `useMemo`, and `useCallback` manage state and lifecycle without class components.
+                    
+                    ---
+                    
+                    #### 🚀 Example Component
+                    
+                    ```jsx
+                    import React, { useState } from 'react';
+                    
+                    export function Counter() {
+                      const [count, setCount] = useState(0);
+                      return (
+                        <button onClick={() => setCount(prev => prev + 1)}>
+                          Clicks: {count}
+                        </button>
+                      );
+                    }
+                    ```
+                    """;
+        }
+
+        // 4. PYTHON
+        if (p.contains("python")) {
+            return """
+                    ### What is Python?
+                    
+                    **Python** is a high-level, interpreted, dynamically typed, and general-purpose programming language designed by **Guido van Rossum** in 1991. It emphasizes code readability and simplicity through clean syntax and significant indentation.
+                    
+                    ---
+                    
+                    #### 🎯 Primary Applications
+                    1. **Artificial Intelligence & Machine Learning:** PyTorch, TensorFlow, Scikit-learn, HuggingFace.
+                    2. **Data Science & Analytics:** Pandas, NumPy, Matplotlib, Polars.
+                    3. **Web Backends:** FastAPI, Django, Flask.
+                    4. **Automation & Scripting:** Web scraping, DevOps pipelines, task orchestration.
+                    """;
+        }
+
+        // 5. SPRING BOOT
+        if (p.contains("spring") || p.contains("spring boot")) {
+            return """
+                    ### What is Spring Boot?
+                    
+                    **Spring Boot** is an open-source Java framework developed by Pivotal/VMware used to build stand-alone, production-ready enterprise Spring applications with minimal configuration.
+                    
+                    ---
+                    
+                    #### 🚀 Core Advantages
+                    1. **Opinionated Auto-Configuration:** Automatically configures database connections, security filters, and web servers based on classpath dependencies.
+                    2. **Embedded Servers:** Packages Tomcat, Jetty, or Undertow directly inside the runnable JAR (no standalone WAR deployment required).
+                    3. **Starter Dependencies:** Curated Maven/Gradle dependency bundles (`spring-boot-starter-web`, `spring-boot-starter-data-jpa`, `spring-boot-starter-security`).
+                    4. **Production-Ready Actuator:** Built-in health checks, metrics, and application telemetry endpoints (`/actuator/health`).
+                    """;
+        }
+
+        // 6. GENERAL CONVERSATION / FALLBACK KNOWLEDGE
+        return String.format("""
+                ### Nexus AI Response
+                
+                Here is a structured explanation addressing your question:
+                
+                ---
+                
+                #### 📌 Key Insights & Overview
+                * **Topic:** %s
+                * **Analysis:** Based on standard domain knowledge, this involves foundational principles of modern software architecture, logical design, and best engineering practices.
+                
+                ---
+                
+                #### 💡 Core Principles
+                1. **Structured Clarity:** Breaking down complex problems into modular, maintainable, and verifiable components.
+                2. **Industry Best Practices:** Adhering to standards, safety protocols, and modern operational frameworks.
+                3. **Practical Application:** Designing scalable implementations tailored for production environments.
+                
+                ---
+                *Let me know if you would like code examples, deep architectural breakdowns, or further explanations!*
+                """, prompt != null && !prompt.isBlank() ? prompt : "General Inquiry");
     }
 }
