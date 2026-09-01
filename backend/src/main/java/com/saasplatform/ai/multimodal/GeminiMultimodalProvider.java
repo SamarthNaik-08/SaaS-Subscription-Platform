@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -25,7 +26,14 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
     private String baseUrl;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
+
+    public GeminiMultimodalProvider() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(15000);
+        factory.setReadTimeout(90000);
+        this.restClient = RestClient.builder().requestFactory(factory).build();
+    }
 
     @Override
     public String getProviderName() {
@@ -39,8 +47,8 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
 
     @Override
     public String processMultimodal(String prompt, List<MultimodalAttachment> attachments, String model, Map<String, Object> options) {
-        String targetModel = (model != null && !model.isBlank()) ? normalizeModel(model) : "gemini-1.5-flash";
-        log.info("[Gemini Multimodal] Processing multimodal inference with model: {}, attachments: {}", 
+        String targetModel = normalizeModel(model);
+        log.info("[Gemini Multimodal] Processing multimodal inference with model: {}, attachments: {}",
                 targetModel, attachments != null ? attachments.size() : 0);
 
         try {
@@ -90,7 +98,7 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
                     genConfig.put("temperature", Double.parseDouble(options.get("temperature").toString()));
                 } catch (Exception ignored) {}
             }
-            genConfig.put("maxOutputTokens", 4096);
+            genConfig.put("maxOutputTokens", 8192);
             requestBody.put("generationConfig", genConfig);
 
             return executeWithModelFallback(targetModel, requestBody);
@@ -102,26 +110,34 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
     }
 
     private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody) {
-        List<String[]> candidates = List.of(
-                new String[]{"v1beta", preferredModel},
-                new String[]{"v1beta", "gemini-1.5-flash"},
-                new String[]{"v1beta", "gemini-2.0-flash"},
-                new String[]{"v1beta", "gemini-2.5-flash"},
-                new String[]{"v1beta", "gemini-1.5-pro"},
-                new String[]{"v1beta", "gemini-pro"},
-                new String[]{"v1", "gemini-1.5-flash"},
-                new String[]{"v1", "gemini-pro"}
-        );
+        // Build fallback list with current live models that support multimodal/vision
+        List<String> candidates = new ArrayList<>();
+        candidates.add(preferredModel);
+
+        String[] fallbacks = {
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.7-flash",
+            "gemini-flash-latest",
+            "gemini-pro-latest"
+        };
+
+        for (String fb : fallbacks) {
+            if (!candidates.contains(fb)) {
+                candidates.add(fb);
+            }
+        }
 
         RestClientResponseException lastException = null;
 
-        for (String[] candidate : candidates) {
-            String apiVersion = candidate[0];
-            String modelName = candidate[1];
-            String url = String.format("%s/%s/models/%s:generateContent?key=%s", baseUrl, apiVersion, modelName, apiKey.trim());
+        for (String modelName : candidates) {
+            String url = String.format("%s/v1beta/models/%s:generateContent?key=%s",
+                    baseUrl, modelName, apiKey.trim());
 
             try {
-                log.debug("Calling Gemini Multimodal API on {} / {}", apiVersion, modelName);
+                log.info("[Gemini Multimodal] Calling model: {}", modelName);
                 String responseJson = restClient.post()
                         .uri(url)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -129,18 +145,24 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
                         .retrieve()
                         .body(String.class);
 
-                return extractTextFromGeminiResponse(responseJson);
+                String result = extractTextFromGeminiResponse(responseJson);
+                log.info("[Gemini Multimodal] Successfully received response from model: {}", modelName);
+                return result;
 
             } catch (RestClientResponseException e) {
                 lastException = e;
-                if (e.getStatusCode().value() == 404) {
-                    log.warn("Gemini multimodal model {} on {} returned 404, trying fallback...", modelName, apiVersion);
+                int status = e.getStatusCode().value();
+                if (status == 404) {
+                    log.warn("[Gemini Multimodal] Model '{}' returned 404, trying next...", modelName);
+                    continue;
+                }
+                if (status == 429) {
+                    log.warn("[Gemini Multimodal] Model '{}' rate limited (429), trying next...", modelName);
                     continue;
                 }
                 return handleGeminiApiError(e);
             } catch (Exception e) {
-                log.error("Network or unexpected error during Gemini Multimodal call: {}", e.getMessage(), e);
-                return "⚠️ **Multimodal Error:** Unable to reach Google Gemini API (" + e.getMessage() + "). Please check your connection.";
+                log.error("[Gemini Multimodal] Network error calling model '{}': {}", modelName, e.getMessage());
             }
         }
 
@@ -168,11 +190,10 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
         if (e.getStatusCode().value() == 400 || e.getStatusCode().value() == 403) {
             return String.format("""
                     ⚠️ **Google Gemini API Key Error (%s)**
-                    
+
                     Google Gemini returned: `%s`
-                    
-                    > **Tip:** Google AI Studio Gemini API keys start with **`AIzaSy...`** (from https://aistudio.google.com/app/apikey).
-                    > Please double-check the key in your `.env` file.
+
+                    > **Tip:** Check your Gemini API key in the `.env` file.
                     """, e.getStatusCode(), detail);
         }
 
@@ -181,8 +202,18 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
 
     private String normalizeModel(String model) {
         if (model == null || model.isBlank()) {
-            return "gemini-1.5-flash";
+            return "gemini-2.5-flash";
         }
+        String m = model.trim().toLowerCase();
+
+        // Map old deprecated model names to current live models
+        if (m.equals("gemini-1.5-flash") || m.equals("gemini-2.0-flash") || m.equals("gemini-2.0-flash-lite")) {
+            return "gemini-2.5-flash";
+        }
+        if (m.equals("gemini-1.5-pro") || m.equals("gemini-pro")) {
+            return "gemini-2.5-pro";
+        }
+
         return model.trim();
     }
 
@@ -205,6 +236,13 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
                     }
                 }
             }
+
+            // Check for blocked content
+            JsonNode promptFeedback = root.path("promptFeedback");
+            if (promptFeedback.has("blockReason")) {
+                return "⚠️ This content was blocked by Google's safety filters. Reason: " + promptFeedback.get("blockReason").asText();
+            }
+
             return "No content was generated by Gemini for this multimodal input.";
         } catch (Exception e) {
             log.error("Failed to parse Gemini multimodal response: {}", responseJson, e);
