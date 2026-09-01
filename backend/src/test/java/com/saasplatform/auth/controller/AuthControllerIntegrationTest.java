@@ -11,7 +11,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -119,13 +118,12 @@ class AuthControllerIntegrationTest {
 
         // Refresh token endpoint
         RefreshTokenRequest refreshReq = new RefreshTokenRequest(refreshToken);
-        MvcResult refreshResult = mockMvc.perform(post("/api/v1/auth/refresh")
+        mockMvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(refreshReq)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty())
-                .andReturn();
+                .andExpect(jsonPath("$.data.refreshToken").isNotEmpty());
 
         // Logout
         mockMvc.perform(post("/api/v1/auth/logout")

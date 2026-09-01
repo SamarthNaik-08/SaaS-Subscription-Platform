@@ -16,7 +16,6 @@ import com.saasplatform.subscription.dto.SubscriptionDto;
 import com.saasplatform.subscription.entity.Subscription;
 import com.saasplatform.subscription.repository.SubscriptionRepository;
 import com.saasplatform.user.entity.User;
-import com.saasplatform.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,7 +30,6 @@ import java.util.UUID;
 public class SubscriptionService {
 
     private final SubscriptionRepository subscriptionRepository;
-    private final UserRepository userRepository;
     private final AuditLogService auditLogService;
     private final NotificationService notificationService;
 
