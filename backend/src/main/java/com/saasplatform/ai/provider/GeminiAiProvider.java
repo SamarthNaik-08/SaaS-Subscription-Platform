@@ -28,12 +28,11 @@ public class GeminiAiProvider implements AiProvider {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final RestClient restClient;
-    private final MockAiProvider mockAiProvider = new MockAiProvider();
 
     public GeminiAiProvider() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(8000);
-        factory.setReadTimeout(20000);
+        factory.setConnectTimeout(15000);
+        factory.setReadTimeout(60000);
         this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
@@ -52,33 +51,8 @@ public class GeminiAiProvider implements AiProvider {
         String targetModel = normalizeModel(model);
         log.info("[Gemini Provider] Generating text with target model: {}", targetModel);
 
-        Map<String, Object> requestBody = new HashMap<>();
-        List<Map<String, Object>> contents = new ArrayList<>();
-        Map<String, Object> userContent = new HashMap<>();
-        userContent.put("role", "user");
-        userContent.put("parts", List.of(Map.of("text", prompt)));
-        contents.add(userContent);
-        requestBody.put("contents", contents);
-
-        if (options != null && options.containsKey("systemInstruction") && options.get("systemInstruction") != null) {
-            String sysInst = options.get("systemInstruction").toString().trim();
-            if (!sysInst.isEmpty()) {
-                requestBody.put("systemInstruction", Map.of(
-                        "parts", List.of(Map.of("text", sysInst))
-                ));
-            }
-        }
-
-        Map<String, Object> genConfig = new HashMap<>();
-        if (options != null && options.containsKey("temperature")) {
-            try {
-                genConfig.put("temperature", Double.parseDouble(options.get("temperature").toString()));
-            } catch (Exception ignored) {}
-        }
-        genConfig.put("maxOutputTokens", 2048);
-        requestBody.put("generationConfig", genConfig);
-
-        return executeWithModelFallback(targetModel, requestBody, prompt, options);
+        Map<String, Object> requestBody = buildRequestBody(prompt, options);
+        return executeWithModelFallback(targetModel, requestBody);
     }
 
     @Override
@@ -89,21 +63,39 @@ public class GeminiAiProvider implements AiProvider {
         Map<String, Object> requestBody = new HashMap<>();
         List<Map<String, Object>> contents = new ArrayList<>();
 
-        String lastPrompt = "Hello";
         if (messages != null) {
             for (ChatMessageDto msg : messages) {
                 String role = "user".equalsIgnoreCase(msg.getRole()) ? "user" : "model";
-                contents.add(Map.of(
-                        "role", role,
-                        "parts", List.of(Map.of("text", msg.getContent()))
-                ));
-                if ("user".equalsIgnoreCase(msg.getRole())) {
-                    lastPrompt = msg.getContent();
-                }
+                Map<String, Object> content = new HashMap<>();
+                content.put("role", role);
+                content.put("parts", List.of(Map.of("text", msg.getContent())));
+                contents.add(content);
             }
         }
         requestBody.put("contents", contents);
 
+        addSystemInstruction(requestBody, options);
+        addGenerationConfig(requestBody, options);
+
+        return executeWithModelFallback(targetModel, requestBody);
+    }
+
+    private Map<String, Object> buildRequestBody(String prompt, Map<String, Object> options) {
+        Map<String, Object> requestBody = new HashMap<>();
+        List<Map<String, Object>> contents = new ArrayList<>();
+        Map<String, Object> userContent = new HashMap<>();
+        userContent.put("role", "user");
+        userContent.put("parts", List.of(Map.of("text", prompt)));
+        contents.add(userContent);
+        requestBody.put("contents", contents);
+
+        addSystemInstruction(requestBody, options);
+        addGenerationConfig(requestBody, options);
+
+        return requestBody;
+    }
+
+    private void addSystemInstruction(Map<String, Object> requestBody, Map<String, Object> options) {
         if (options != null && options.containsKey("systemInstruction") && options.get("systemInstruction") != null) {
             String sysInst = options.get("systemInstruction").toString().trim();
             if (!sysInst.isEmpty()) {
@@ -112,38 +104,49 @@ public class GeminiAiProvider implements AiProvider {
                 ));
             }
         }
+    }
 
+    private void addGenerationConfig(Map<String, Object> requestBody, Map<String, Object> options) {
         Map<String, Object> genConfig = new HashMap<>();
         if (options != null && options.containsKey("temperature")) {
             try {
                 genConfig.put("temperature", Double.parseDouble(options.get("temperature").toString()));
             } catch (Exception ignored) {}
         }
-        genConfig.put("maxOutputTokens", 2048);
+        genConfig.put("maxOutputTokens", 4096);
         requestBody.put("generationConfig", genConfig);
-
-        return executeWithModelFallback(targetModel, requestBody, lastPrompt, options);
     }
 
-    private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody, String fallbackPrompt, Map<String, Object> options) {
-        List<String[]> candidates = List.of(
-                new String[]{"v1beta", preferredModel},
-                new String[]{"v1beta", "gemini-1.5-flash"},
-                new String[]{"v1beta", "gemini-2.0-flash"},
-                new String[]{"v1beta", "gemini-2.0-flash-exp"},
-                new String[]{"v1beta", "gemini-1.5-pro"},
-                new String[]{"v1beta", "gemini-2.5-flash"}
-        );
+    private String executeWithModelFallback(String preferredModel, Map<String, Object> requestBody) {
+        // Build fallback candidate list: preferred model first, then reliable alternatives
+        List<String> candidates = new ArrayList<>();
+        candidates.add(preferredModel);
+
+        // Add current live Gemini models as fallbacks (ordered by speed/reliability)
+        String[] fallbacks = {
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.7-flash",
+            "gemini-flash-latest",
+            "gemini-pro-latest"
+        };
+
+        for (String fb : fallbacks) {
+            if (!candidates.contains(fb)) {
+                candidates.add(fb);
+            }
+        }
 
         RestClientResponseException lastException = null;
 
-        for (String[] candidate : candidates) {
-            String apiVersion = candidate[0];
-            String modelName = candidate[1];
-            String url = String.format("%s/%s/models/%s:generateContent?key=%s", baseUrl, apiVersion, modelName, apiKey.trim());
+        for (String modelName : candidates) {
+            String url = String.format("%s/v1beta/models/%s:generateContent?key=%s",
+                    baseUrl, modelName, apiKey.trim());
 
             try {
-                log.info("Executing Gemini call on {} / {}", apiVersion, modelName);
+                log.info("[Gemini] Calling model: {}", modelName);
                 String responseJson = restClient.post()
                         .uri(url)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -151,33 +154,45 @@ public class GeminiAiProvider implements AiProvider {
                         .retrieve()
                         .body(String.class);
 
-                return extractTextFromGeminiResponse(responseJson);
+                String result = extractTextFromGeminiResponse(responseJson);
+                log.info("[Gemini] Successfully received response from model: {}", modelName);
+                return result;
 
             } catch (RestClientResponseException e) {
                 lastException = e;
-                if (e.getStatusCode().value() == 404) {
-                    log.warn("Gemini model {} on {} returned 404, trying next candidate...", modelName, apiVersion);
-                    continue;
+                int status = e.getStatusCode().value();
+                if (status == 404) {
+                    log.warn("[Gemini] Model '{}' returned 404 (not found), trying next...", modelName);
+                } else if (status == 429) {
+                    log.warn("[Gemini] Model '{}' rate limited (429), trying next...", modelName);
+                } else {
+                    log.warn("[Gemini] Model '{}' returned HTTP {}: {}", modelName, status, e.getResponseBodyAsString());
                 }
-                log.warn("Gemini model {} on {} returned status {}, trying fallback...", modelName, apiVersion, e.getStatusCode());
             } catch (Exception e) {
-                log.error("Network error calling Gemini API: {}", e.getMessage(), e);
-                return mockAiProvider.generateText(fallbackPrompt, preferredModel, options);
+                log.error("[Gemini] Network error calling model '{}': {}", modelName, e.getMessage());
             }
         }
 
-        if (lastException != null) {
-            log.warn("All live Google Gemini candidate models returned error ({}), gracefully synthesizing high-quality response via Nexus Engine", lastException.getMessage());
-            return mockAiProvider.generateText(fallbackPrompt, preferredModel, options);
-        }
-
-        return mockAiProvider.generateText(fallbackPrompt, preferredModel, options);
+        // All candidates failed
+        String errorMsg = lastException != null ? lastException.getResponseBodyAsString() : "Unknown error";
+        log.error("[Gemini] All model candidates failed. Last error: {}", errorMsg);
+        return "⚠️ Unable to reach Google Gemini API. Please check your API key and internet connection. Error: " + errorMsg;
     }
 
     private String normalizeModel(String model) {
         if (model == null || model.isBlank()) {
-            return "gemini-1.5-flash";
+            return "gemini-2.5-flash";
         }
+        String m = model.trim().toLowerCase();
+
+        // Map old deprecated model names to current live models
+        if (m.equals("gemini-1.5-flash") || m.equals("gemini-2.0-flash") || m.equals("gemini-2.0-flash-lite")) {
+            return "gemini-2.5-flash";
+        }
+        if (m.equals("gemini-1.5-pro") || m.equals("gemini-pro")) {
+            return "gemini-2.5-pro";
+        }
+
         return model.trim();
     }
 
@@ -200,7 +215,14 @@ public class GeminiAiProvider implements AiProvider {
                     }
                 }
             }
-            return "No response content generated by Gemini.";
+
+            // Check for blocked content
+            JsonNode promptFeedback = root.path("promptFeedback");
+            if (promptFeedback.has("blockReason")) {
+                return "⚠️ This prompt was blocked by Google's safety filters. Reason: " + promptFeedback.get("blockReason").asText();
+            }
+
+            return "No response content generated. Raw: " + responseJson;
         } catch (Exception e) {
             log.error("Failed to parse Gemini response: {}", responseJson, e);
             return responseJson;

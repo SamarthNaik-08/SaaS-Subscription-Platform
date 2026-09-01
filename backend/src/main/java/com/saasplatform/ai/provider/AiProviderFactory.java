@@ -60,16 +60,25 @@ public class AiProviderFactory {
 
     public List<Map<String, String>> getAvailableModels() {
         List<Map<String, String>> models = new ArrayList<>();
-        models.add(createModelMap("gemini-1.5-flash", "Gemini 1.5 Flash (Ultra Fast)", "Google",
-                geminiAiProvider.isAvailable()));
-        models.add(createModelMap("gemini-2.0-flash", "Gemini 2.0 Flash (Next-Gen)", "Google",
-                geminiAiProvider.isAvailable()));
-        models.add(createModelMap("gemini-1.5-pro", "Gemini 1.5 Pro (Deep Analysis)", "Google",
-                geminiAiProvider.isAvailable()));
-        models.add(createModelMap("gemini-2.5-flash", "Gemini 2.5 Flash (Preview)", "Google",
-                geminiAiProvider.isAvailable()));
-        models.add(createModelMap("gpt-4o", "GPT-4o (Multimodal)", "OpenAI", openAiProvider.isAvailable()));
-        models.add(createModelMap("gpt-4o-mini", "GPT-4o Mini (Fast)", "OpenAI", openAiProvider.isAvailable()));
+        boolean geminiUp = geminiAiProvider.isAvailable();
+        boolean openaiUp = openAiProvider.isAvailable();
+
+        // Current live Google Gemini models
+        models.add(createModelMap("gemini-2.5-flash",
+                "Gemini 2.5 Flash (Fast & Smart)", "Google", geminiUp));
+        models.add(createModelMap("gemini-2.5-pro",
+                "Gemini 2.5 Pro (Deep Analysis)", "Google", geminiUp));
+        models.add(createModelMap("gemini-3.5-flash",
+                "Gemini 3.5 Flash (Latest)", "Google", geminiUp));
+        models.add(createModelMap("gemini-3.7-flash",
+                "Gemini 3.7 Flash (Cutting Edge)", "Google", geminiUp));
+
+        // OpenAI models
+        models.add(createModelMap("gpt-4o",
+                "GPT-4o (Multimodal)", "OpenAI", openaiUp));
+        models.add(createModelMap("gpt-4o-mini",
+                "GPT-4o Mini (Fast)", "OpenAI", openaiUp));
+
         return models;
     }
 
