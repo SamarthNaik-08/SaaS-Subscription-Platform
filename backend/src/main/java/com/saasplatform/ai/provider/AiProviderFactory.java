@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -58,22 +60,22 @@ public class AiProviderFactory {
     }
 
     public List<Map<String, String>> getAvailableModels() {
-        return List.of(
-                createModelMap("gemini-1.5-flash", "Gemini 1.5 Flash (Ultra Fast)", "Google", geminiAiProvider.isAvailable()),
-                createModelMap("gemini-2.0-flash", "Gemini 2.0 Flash (Next-Gen)", "Google", geminiAiProvider.isAvailable()),
-                createModelMap("gemini-1.5-pro", "Gemini 1.5 Pro (Deep Analysis)", "Google", geminiAiProvider.isAvailable()),
-                createModelMap("gemini-2.5-flash", "Gemini 2.5 Flash (Preview)", "Google", geminiAiProvider.isAvailable()),
-                createModelMap("gpt-4o", "GPT-4o (Multimodal)", "OpenAI", openAiProvider.isAvailable()),
-                createModelMap("gpt-4o-mini", "GPT-4o Mini (Fast)", "OpenAI", openAiProvider.isAvailable())
-        );
+        List<Map<String, String>> models = new ArrayList<>();
+        models.add(createModelMap("gemini-1.5-flash", "Gemini 1.5 Flash (Ultra Fast)", "Google", geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gemini-2.0-flash", "Gemini 2.0 Flash (Next-Gen)", "Google", geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gemini-1.5-pro", "Gemini 1.5 Pro (Deep Analysis)", "Google", geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gemini-2.5-flash", "Gemini 2.5 Flash (Preview)", "Google", geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gpt-4o", "GPT-4o (Multimodal)", "OpenAI", openAiProvider.isAvailable()));
+        models.add(createModelMap("gpt-4o-mini", "GPT-4o Mini (Fast)", "OpenAI", openAiProvider.isAvailable()));
+        return models;
     }
 
     private Map<String, String> createModelMap(String id, String name, String provider, boolean available) {
-        return Map.of(
-                "id", id,
-                "name", name,
-                "provider", provider,
-                "available", String.valueOf(available)
-        );
+        Map<String, String> map = new HashMap<>();
+        map.put("id", id);
+        map.put("name", name);
+        map.put("provider", provider);
+        map.put("available", String.valueOf(available));
+        return map;
     }
 }
