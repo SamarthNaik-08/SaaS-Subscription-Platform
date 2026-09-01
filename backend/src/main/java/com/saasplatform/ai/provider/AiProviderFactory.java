@@ -21,8 +21,7 @@ public class AiProviderFactory {
     public AiProviderFactory(
             GeminiAiProvider geminiAiProvider,
             OpenAiProvider openAiProvider,
-            MockAiProvider mockAiProvider
-    ) {
+            MockAiProvider mockAiProvider) {
         this.geminiAiProvider = geminiAiProvider;
         this.openAiProvider = openAiProvider;
         this.mockAiProvider = mockAiProvider;
@@ -61,10 +60,14 @@ public class AiProviderFactory {
 
     public List<Map<String, String>> getAvailableModels() {
         List<Map<String, String>> models = new ArrayList<>();
-        models.add(createModelMap("gemini-1.5-flash", "Gemini 1.5 Flash (Ultra Fast)", "Google", geminiAiProvider.isAvailable()));
-        models.add(createModelMap("gemini-2.0-flash", "Gemini 2.0 Flash (Next-Gen)", "Google", geminiAiProvider.isAvailable()));
-        models.add(createModelMap("gemini-1.5-pro", "Gemini 1.5 Pro (Deep Analysis)", "Google", geminiAiProvider.isAvailable()));
-        models.add(createModelMap("gemini-2.5-flash", "Gemini 2.5 Flash (Preview)", "Google", geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gemini-1.5-flash", "Gemini 1.5 Flash (Ultra Fast)", "Google",
+                geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gemini-2.0-flash", "Gemini 2.0 Flash (Next-Gen)", "Google",
+                geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gemini-1.5-pro", "Gemini 1.5 Pro (Deep Analysis)", "Google",
+                geminiAiProvider.isAvailable()));
+        models.add(createModelMap("gemini-2.5-flash", "Gemini 2.5 Flash (Preview)", "Google",
+                geminiAiProvider.isAvailable()));
         models.add(createModelMap("gpt-4o", "GPT-4o (Multimodal)", "OpenAI", openAiProvider.isAvailable()));
         models.add(createModelMap("gpt-4o-mini", "GPT-4o Mini (Fast)", "OpenAI", openAiProvider.isAvailable()));
         return models;
