@@ -105,7 +105,6 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
         List<String[]> candidates = List.of(
                 new String[]{"v1beta", preferredModel},
                 new String[]{"v1beta", "gemini-2.5-flash"},
-                new String[]{"v1beta", "gemini-2.0-flash"},
                 new String[]{"v1beta", "gemini-2.5-pro"}
         );
 
@@ -172,11 +171,12 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
         if (model == null || model.isBlank()) {
             return "gemini-2.5-flash";
         }
-        if (model.contains("gemini-2.5-flash") || model.contains("gemini-3")) return "gemini-2.5-flash";
-        if (model.contains("gemini-2.5-pro")) return "gemini-2.5-pro";
-        if (model.contains("gemini-2.0-flash")) return "gemini-2.0-flash";
-        if (model.contains("gemini-1.5-flash")) return "gemini-2.5-flash";
-        if (model.contains("gemini-1.5-pro")) return "gemini-2.5-pro";
+        if (model.contains("gemini-2.5-flash") || model.contains("gemini-3") || model.contains("gemini-2.0") || model.contains("gemini-1.5-flash")) {
+            return "gemini-2.5-flash";
+        }
+        if (model.contains("gemini-2.5-pro") || model.contains("gemini-1.5-pro")) {
+            return "gemini-2.5-pro";
+        }
         return model.trim();
     }
 

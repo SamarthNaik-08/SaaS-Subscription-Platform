@@ -50,7 +50,6 @@ public class AiProviderFactory {
         return List.of(
                 Map.of("id", "gemini-2.5-flash", "name", "Gemini 2.5 Flash (Fast & Next-Gen)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
                 Map.of("id", "gemini-2.5-pro", "name", "Gemini 2.5 Pro (Deep Reasoning)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
-                Map.of("id", "gemini-2.0-flash", "name", "Gemini 2.0 Flash (Fast)", "provider", "Google", "available", String.valueOf(geminiAiProvider.isAvailable())),
                 Map.of("id", "gpt-4o", "name", "GPT-4o (High-Throughput Multimodal)", "provider", "OpenAI", "available", String.valueOf(openAiProvider.isAvailable())),
                 Map.of("id", "gpt-4o-mini", "name", "GPT-4o Mini (Cost-Optimized)", "provider", "OpenAI", "available", String.valueOf(openAiProvider.isAvailable()))
         );

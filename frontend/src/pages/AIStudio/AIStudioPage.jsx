@@ -69,14 +69,6 @@ const AVAILABLE_MODELS = [
     description: 'Deep analytical model with extended context window for complex synthesis.',
   },
   {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    category: 'Fast',
-    speed: 'Fast',
-    provider: 'Google',
-    description: 'High-speed model optimized for rapid assistance and coding tasks.',
-  },
-  {
     id: 'gpt-4o',
     name: 'GPT-4o (Multimodal)',
     category: 'Omni',

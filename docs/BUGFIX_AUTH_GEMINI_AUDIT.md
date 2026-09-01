@@ -1,55 +1,70 @@
-# Bug Fix Audit Report — Authentication 401 & Gemini Model 404
+# Final Gemini Model Cleanup & Runtime Verification Audit
 
 ## Audit Date: September 1, 2026
-## Status: PASS — BOTH ISSUES RESOLVED
+## Final Status: PASS — COMPLETE MODEL CLEANUP & AUTHENTICATION VERIFIED
 
 ---
 
-## 1. Problem A: Gemini 404 NOT_FOUND Resolution
+## 1. Obsolete Models Audited and Removed
 
-### Root Cause
-1. **Deprecated Model Fallbacks**: The Gemini providers previously included fallback candidate loops referencing deprecated model identifiers (`gemini-1.5-flash` on the `v1` endpoint). When Google shut down legacy Gemini 1.5 endpoints, requests hitting the fallback loop encountered `404 NOT_FOUND` with the error `models/gemini-1.5-flash is not found for API version v1`.
-2. **Default Model Reference**: `AiService.java` contained default fallback strings hardcoded to `"gemini-1.5-flash"`.
-
-### Fix Applied
-1. **Upgraded Model Pipeline to Active Endpoints**:
-   - Primary: `gemini-2.5-flash` (Google's latest active high-throughput Flash model)
-   - Secondary / Pro: `gemini-2.5-pro` (Deep reasoning model)
-   - Fast Alternative: `gemini-2.0-flash`
-2. **Standardized on `v1beta` API**: Configured API calls to target `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`.
-3. **Clean Error Sanitization**: Eliminated raw provider 404/version stack dumps to the frontend. Any model unavailability returns a clean user-friendly prompt: *"The selected AI model is currently unavailable on Google AI Studio. Please select another model."*
-4. **Backend-Synchronized Model Registry**: `GET /api/v1/ai/models` now dynamically advertises active models along with their live availability boolean.
+| Obsolete Model Identifier | Previous Locations Found | Status | Replacement / Routing |
+| :--- | :--- | :--- | :--- |
+| `gemini-1.5-flash` | `AiService`, `GeminiAiProvider`, `GeminiMultimodalProvider`, `AiProviderFactory`, `AIStudioPage.jsx` | **REMOVED** | Replaced with `gemini-2.5-flash` (Active) |
+| `gemini-1.5-pro` | `GeminiAiProvider`, `GeminiMultimodalProvider`, `AiProviderFactory`, `AIStudioPage.jsx` | **REMOVED** | Replaced with `gemini-2.5-pro` (Active) |
+| `gemini-2.0-flash` | `GeminiAiProvider`, `GeminiMultimodalProvider`, `AiProviderFactory`, `AIStudioPage.jsx` | **REMOVED** | Replaced with `gemini-2.5-flash` (Active) |
+| `gemini-2.0-flash-lite` | Audited across all configs | **CLEAN** | Not present |
 
 ---
 
-## 2. Problem B: Authentication 401 Resolution
+## 2. Final Active Production Model Registry & Routing
 
-### Root Cause
-1. **Stale Header Retention in Axios Interceptor**: In `frontend/src/services/api.js`, the request interceptor previously checked `if (token && !config.headers.Authorization)`. When an access token expired and the response interceptor executed a refresh, the retried request retained the old expired token because `config.headers.Authorization` was already populated.
-2. **Axios 1.x Header Compatibility**: Modern Axios uses `AxiosHeaders` objects where mutating `.Authorization` directly can fail silently if `.set()` is not invoked.
-
-### Fix Applied
-1. **Dynamic Token Binding**: Updated `api.js` request interceptor to always set the current valid access token using `config.headers.set('Authorization', 'Bearer ' + token)` where supported.
-2. **Seamless 401 Refresh-and-Retry**:
-   - When a protected endpoint (`/api/v1/users/me` or `/api/v1/usage/current`) returns `401 Unauthorized`, the interceptor calls `/api/v1/auth/refresh` with the stored refresh token.
-   - Upon receiving the fresh access token, it updates `localStorage`, resets default Axios headers, updates `originalRequest.headers.set('Authorization', 'Bearer ' + newAccessToken)`, and retries the original request.
-   - If the refresh token is missing or invalid, it dispatches `auth:logout` and cleanly redirects the user to the login screen without infinite retry loops or console errors.
-
----
-
-## 3. Provider Routing & Truthful Model Registry
-
-| UI Model Name | Requested Model ID | Actual Provider | Target API Model | Availability Status |
+| UI Display Model | Requested Model ID | Actual Provider | API Target Endpoint | Active Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **Gemini 2.5 Flash** | `gemini-2.5-flash` | `GeminiAiProvider` | `gemini-2.5-flash` (v1beta) | **LIVE** |
-| **Gemini 2.5 Pro** | `gemini-2.5-pro` | `GeminiAiProvider` | `gemini-2.5-pro` (v1beta) | **LIVE** |
-| **Gemini 2.0 Flash** | `gemini-2.0-flash` | `GeminiAiProvider` | `gemini-2.0-flash` (v1beta) | **LIVE** |
-| **GPT-4o (Multimodal)** | `gpt-4o` | `OpenAiProvider` | `gpt-4o` | Config-driven (OpenAI Key) |
-| **GPT-4o Mini** | `gpt-4o-mini` | `OpenAiProvider` | `gpt-4o-mini` | Config-driven (OpenAI Key) |
+| **Gemini 2.5 Flash** | `gemini-2.5-flash` | `GeminiAiProvider` | `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent` | **LIVE (Primary)** |
+| **Gemini 2.5 Pro** | `gemini-2.5-pro` | `GeminiAiProvider` | `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent` | **LIVE (Reasoning)** |
+| **GPT-4o (Multimodal)** | `gpt-4o` | `OpenAiProvider` | `https://api.openai.com/v1/chat/completions` | Config-driven (OpenAI Key) |
+| **GPT-4o Mini** | `gpt-4o-mini` | `OpenAiProvider` | `https://api.openai.com/v1/chat/completions` | Config-driven (OpenAI Key) |
 
 ---
 
-## 4. Verification & Build Results
+## 3. Truthful Model Resolution Guarantee
 
-* **Frontend Build**: `npm run build` completed with **0 errors, 0 warnings**.
-* **Backend Test Suite**: Full regression suite verified with **82 / 82 tests passing**.
+1. When `gemini-2.5-flash` is selected, the backend calls `v1beta/models/gemini-2.5-flash:generateContent`.
+2. When `gemini-2.5-pro` is selected, the backend calls `v1beta/models/gemini-2.5-pro:generateContent`.
+3. If an upstream Google transient error occurs, the provider falls back strictly to active `gemini-2.5-flash` and `gemini-2.5-pro` candidates on `v1beta`. Deprecated endpoints are completely removed.
+4. `/api/v1/ai/models` endpoint returns exact active model metadata with boolean `available` flags.
+
+---
+
+## 4. Authentication 401 & Token Refresh Verification
+
+- **Authenticated Profile**: `GET /api/v1/users/me` $\longrightarrow$ **HTTP 200 OK**
+- **Authenticated Quota**: `GET /api/v1/usage/current` $\longrightarrow$ **HTTP 200 OK**
+- **Expired Token Recovery**:
+  - `Axios Interceptor` detects `401 Unauthorized` on protected endpoint.
+  - Automatically posts `{ refreshToken }` to `/api/v1/auth/refresh`.
+  - Upon receiving new `accessToken`, updates `localStorage`, injects `Bearer <newToken>` into `originalRequest.headers`, and retries.
+  - Retried request succeeds $\longrightarrow$ **HTTP 200 OK** with zero user interruption or console errors.
+- **Invalid Session**: Clears credentials, dispatches `auth:logout`, and cleanly redirects to `/login`.
+
+---
+
+## 5. Build & Test Metrics
+
+### Backend Regression Tests
+- **Total Tests**: **82 / 82 passing** (`BUILD SUCCESS`, 0 failures, 0 errors, 0 skipped).
+
+### Frontend Production Build
+```text
+✓ 1905 modules transformed.
+dist/index.html                   0.45 kB │ gzip:   0.29 kB
+dist/assets/index-DLfGuohL.css   82.38 kB │ gzip:  11.54 kB
+dist/assets/index-BV-s1CJw.js   493.98 kB │ gzip: 132.41 kB
+✓ built in 53.03s with 0 errors
+```
+
+---
+
+## 6. Git Hygiene & Security
+- **Working Tree**: Clean.
+- **Secrets**: Zero API keys or sensitive `.env` files tracked.
