@@ -115,13 +115,12 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
         candidates.add(preferredModel);
 
         String[] fallbacks = {
-            "gemini-2.5-flash",
-            "gemini-2.5-pro",
-            "gemini-2.5-flash-lite",
             "gemini-3.5-flash",
             "gemini-3.7-flash",
             "gemini-flash-latest",
-            "gemini-pro-latest"
+            "gemini-pro-latest",
+            "gemini-2.5-flash",
+            "gemini-2.5-pro"
         };
 
         for (String fb : fallbacks) {
@@ -202,16 +201,16 @@ public class GeminiMultimodalProvider implements AiMultimodalProvider {
 
     private String normalizeModel(String model) {
         if (model == null || model.isBlank()) {
-            return "gemini-2.5-flash";
+            return "gemini-3.5-flash";
         }
         String m = model.trim().toLowerCase();
 
-        // Map old deprecated model names to current live models
-        if (m.equals("gemini-1.5-flash") || m.equals("gemini-2.0-flash") || m.equals("gemini-2.0-flash-lite")) {
-            return "gemini-2.5-flash";
+        // Map old deprecated model names to confirmed working model
+        if (m.equals("gemini-1.5-flash") || m.equals("gemini-2.0-flash") || m.equals("gemini-2.0-flash-lite") || m.equals("gemini-2.5-flash")) {
+            return "gemini-3.5-flash";
         }
-        if (m.equals("gemini-1.5-pro") || m.equals("gemini-pro")) {
-            return "gemini-2.5-pro";
+        if (m.equals("gemini-1.5-pro") || m.equals("gemini-pro") || m.equals("gemini-2.5-pro")) {
+            return "gemini-3.5-flash";
         }
 
         return model.trim();
